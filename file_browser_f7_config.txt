@@ -1,0 +1,5 @@
+Preprocessor(defines): ARM           GFX_LIB         USE_USB_HS
+                       STM32F7XX     SUPPORT_WAV     USE_LCD_HDMI
+                       STM32F769xx   SUPPORT_MP3     USE_AUDIO_DECODERS
+                                     SUPPORT_JMV     USE_HAL_DRIVER
+                                                     USE_STM32F769I_DISCO
