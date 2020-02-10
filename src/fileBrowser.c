@@ -115,7 +115,8 @@ const XCHAR 				AlreadyExistsStr[] = {'A','l','r','e','a','d','y',' ','E','x','i
 #define SLIDERSCROLLDELAY   	50
 #define AUTOPLAYDELAY   		100
 
-#define COPY_BUFF_SIZE 			512
+#define SLOW_BUFF_SIZE 			512
+#define FAST_BUFF_SIZE 			(1024 * 32)
 
 #define WAIT_UNTIL_FINISH(x)    while(!x)
 
@@ -141,8 +142,8 @@ const XCHAR 				AlreadyExistsStr[] = {'A','l','r','e','a','d','y',' ','E','x','i
 
 #define LBJPGXPOS       (0)
 #define LBJPGYPOS       (0)
-#define LBJPGWIDTH      (GetMaxX() - SCROLLBTNWIDTH - 1)    // width		
-#define LBJPGHEIGHT     (GetMaxY() - 46)                    // height (36 is taken from the dimension of the navigation control buttons)
+#define LBJPGWIDTH      (BSP_LCD_GetXSize() - SCROLLBTNWIDTH - 1)    // width
+#define LBJPGHEIGHT     (BSP_LCD_GetYSize() - 46)                    // height (36 is taken from the dimension of the navigation control buttons)
 #define BTNUP4LBXPOS    (LBJPGXPOS + LBJPGWIDTH + 1)
 #define BTNUP4LBYPOS    (LBJPGYPOS)
 #define BTNUP4LBWIDTH   (SCROLLBTNWIDTH)
@@ -158,9 +159,9 @@ const XCHAR 				AlreadyExistsStr[] = {'A','l','r','e','a','d','y',' ','E','x','i
 
 #define CTRLBTN_XINDENT         0
 #define CTRLBTN_HEIGHT          45
-#define CTRLBTN_WIDTH           (((GetMaxX() + 1) - (CTRLBTN_XINDENT * 2)) / 4)
-#define CtrlBtnTop()            (GetMaxY() - CTRLBTN_HEIGHT)
-#define CtrlBtnBottom()         GetMaxY()
+#define CTRLBTN_WIDTH           (((BSP_LCD_GetXSize() + 1) - (CTRLBTN_XINDENT * 2)) / 4)
+#define CtrlBtnTop()            (BSP_LCD_GetYSize() - CTRLBTN_HEIGHT)
+#define CtrlBtnBottom()         BSP_LCD_GetYSize()
 #define CtrlBtnLeft(column)     (((column + 1) * CTRLBTN_XINDENT) + (column * CTRLBTN_WIDTH))
 #define CtrlBtnRight(column)    ((column + 1) * (CTRLBTN_XINDENT + CTRLBTN_WIDTH))
 
@@ -171,8 +172,8 @@ const XCHAR 				AlreadyExistsStr[] = {'A','l','r','e','a','d','y',' ','E','x','i
 
 #define MOUSE_WINDOW_X                  0
 #define MOUSE_WINDOW_Y                  0
-#define MOUSE_WINDOW_HEIGHT             480
-#define MOUSE_WINDOW_WIDTH              800
+#define MOUSE_WINDOW_HEIGHT             BSP_LCD_GetYSize()
+#define MOUSE_WINDOW_WIDTH              BSP_LCD_GetXSize()
 
 /* Private variables --------------------------------------------------------*/
 /**
@@ -193,12 +194,12 @@ extern AUDIO_PLAYBACK_StateTypeDef 	AudioState;
 /**
   * @brief   File system variables
   */
-BYTE                        mediaPresent[2] = {FALSE, FALSE};
-VOLUME_INFO                 volume[2];
+BYTE                        mediaPresent[3] = {FALSE, FALSE, FALSE};
+VOLUME_INFO                 volume[3];
 FILINFO 					finfo;
 FIL 						fSrc, fDst;
-FATFS 						FatFs[2];
-char 						Path1[4], Path2[4];
+FATFS 						FatFs[3];
+char 						Path1[4], Path2[4], Path3[4];
 
 FolderElement               aFolderElement[MAX_ELEMENTS];
 FolderElement 				SelectElement;
@@ -219,7 +220,7 @@ CHAR 						lfnbuff[256], SrcPath[256], DstPath[256], *SrcPathptr = SrcPath;
 int16_t  prev_x = 5, prev_y = 1;
 uint8_t  mouse_button = 0;
 
-extern USBH_HandleTypeDef hUSBHost;
+extern USBH_HandleTypeDef hUSBHost[];
 extern uint8_t host_state;
 
 extern Disk_drvTypeDef  	disk;
@@ -276,9 +277,9 @@ WORD    Create_fileBrowser(void) {
     TextHeight = GetTextHeight((void *) &ARIALUNI_18);
 
     SetColor(BLACK);
-    TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)DetectingStr, (void *) &ARIALUNI_18)) / 2;
+    TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)DetectingStr, (void *) &ARIALUNI_18)) / 2;
     WAIT_UNTIL_FINISH(OutTextXY(TextX, 3 * TextHeight, (XCHAR *)DetectingStr));
-    TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)PleaseWaitStr, (void *) &ARIALUNI_18)) / 2;
+    TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)PleaseWaitStr, (void *) &ARIALUNI_18)) / 2;
     WAIT_UNTIL_FINISH(OutTextXY(TextX, 6 * TextHeight, (XCHAR *)PleaseWaitStr));
 
     blImageOnScreen = 0;
@@ -408,7 +409,7 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
         {
             blImageOnScreen = 0;
 
-            GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+            GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 
             SetFileCtrls(FALSE);
         }
@@ -427,7 +428,8 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
     		bVideoPauseMenu = TRUE;
     		AudioState = AUDIO_STATE_PAUSE;
 
-    		BSP_LCD_SetLayerWindow(0, 0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
+    		if(!jmvHeader.frame_jpeg)
+    			BSP_LCD_SetLayerWindow(0, 0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 
     		SetAudioCtrls(TRUE);
     		BtnSetText(pBtnD, ResumeStr);
@@ -530,8 +532,8 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
 									SelectElement.FmtType,
 									0,
 									0,
-									IMG_SCREEN_WIDTH,
-									IMG_SCREEN_HEIGHT,
+									BSP_LCD_GetXSize(),
+									BSP_LCD_GetYSize(),
 									(IMG_DOWN_SCALE | IMG_ALIGN_CENTER),
 									&ff_if,
 									NULL
@@ -568,7 +570,7 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
 					else if(SelectElement.FmtType == OTHER)
 					{
 						DisplayErrorInfo(UNSUPPORTED_FORMAT);
-						GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+						GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 					}
 				}
             }
@@ -639,7 +641,7 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
 
             	   SetState(pBtnB, BTN_DISABLED);
             	   ClrState(pBtnC, BTN_DISABLED);
-            	   GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+            	   GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
             	   bFileCopy = TRUE;
                }
            }
@@ -752,10 +754,15 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
 
                 	bVideoPauseMenu = FALSE;
                 	AudioState = AUDIO_STATE_RESUME;
-                	BSP_LCD_SetLayerWindow(	0,
-                							(BSP_LCD_GetXSize() - jmvHeader.frame_width) / 2,
-											(BSP_LCD_GetYSize() - jmvHeader.frame_height) / 2,
-											jmvHeader.frame_width, jmvHeader.frame_height );
+
+                	if(!jmvHeader.frame_jpeg)
+                	{
+						BSP_LCD_SetLayerWindow(	0,
+												(BSP_LCD_GetXSize() - jmvHeader.frame_width) / 2,
+												(BSP_LCD_GetYSize() - jmvHeader.frame_height) / 2,
+												jmvHeader.frame_width, jmvHeader.frame_height );
+                	}
+
                 	SetAudioCtrls(FALSE);
 
                 	return (1);
@@ -903,9 +910,9 @@ WORD    fileBrowser_DrawCallback(void) {
     HID_MOUSE_Info_TypeDef *m_pinfo;
 
 	if(host_state == HOST_USER_CLASS_ACTIVE && \
-	   USBH_GetActiveClass(&hUSBHost) == USB_HID_CLASS)
+	   USBH_GetActiveClass(&hUSBHost[4]) == USB_HID_CLASS)
 	{
-		m_pinfo = USBH_HID_GetMouseInfo(&hUSBHost);
+		m_pinfo = USBH_HID_GetMouseInfo(&hUSBHost[4]);
 		if(m_pinfo != NULL)
 		{
 			mouse_button = m_pinfo->buttons[0];
@@ -913,6 +920,16 @@ WORD    fileBrowser_DrawCallback(void) {
 			/* Handle Mouse data position */
     		USR_MOUSE_ProcessData(m_pinfo);
 		}
+
+		if( (blVideoPlaying == TRUE && bVideoPauseMenu == TRUE) ||\
+		    (blVideoPlaying == FALSE) )
+		{
+			BSP_LCD_SetLayerVisible(1, ENABLE);
+		}
+	}
+	else
+	{
+		BSP_LCD_SetLayerVisible(1, DISABLE);
 	}
 
 	MonitorDriveMedia();
@@ -924,7 +941,10 @@ WORD    fileBrowser_DrawCallback(void) {
 	if(mediaPresent[1] == FALSE)
 		f_mount(NULL, (TCHAR const*)Path2, 1);
 
-	if(mediaPresent[0] == FALSE && mediaPresent[1] == FALSE)
+	if(mediaPresent[2] == FALSE)
+		f_mount(NULL, (TCHAR const*)Path3, 1);
+
+	if(mediaPresent[0] == FALSE && mediaPresent[1] == FALSE && mediaPresent[2] == FALSE)
 	{
 		// Free memory used by graphic objects
 		GOLFree();
@@ -1033,7 +1053,9 @@ void FillNewElements(void) {
     {
     	f_getcwd (&PathStr, sizeof(PathStr));
 
-    	if( (strcmp(PathStr, volume[0].label) == 0) || (strcmp(PathStr, volume[1].label) == 0) )
+    	if( (strcmp(PathStr, volume[0].label) == 0) || \
+    		(strcmp(PathStr, volume[1].label) == 0) || \
+			(strcmp(PathStr, volume[2].label) == 0) )
     	{
     		aFolderElement[bNumElementsInFolder].blVolume = 1;
     		aFolderElement[bNumElementsInFolder].blFolder = 1;
@@ -1226,55 +1248,55 @@ void DisplayErrorInfo(FB_ERROR nError) {
     	SetFont((void *) &ARIALUNI_18);
 
     	TextHeight = GetTextHeight((void *) &ARIALUNI_18);
-    	TextY = (IMG_SCREEN_HEIGHT - 3 * TextHeight) / 2;
+    	TextY = (BSP_LCD_GetYSize() - 3 * TextHeight) / 2;
 
     	switch(nError) {
 		case READ_ERROR:
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)ReadStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)ReadStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)ReadStr));
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)ErrorStr));
 			break;
 
 		case MEMORY_ERROR:
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)MemoryAllocationStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)MemoryAllocationStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)MemoryAllocationStr));
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)ErrorStr));
 			break;
 
 		case WRITE_ERROR:
-				TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)WriteStr, (void *) &ARIALUNI_18)) / 2;
+				TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)WriteStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)WriteStr));
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)ErrorStr));
 			break;
 
 		case DELETE_ERROR:
-				TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)DeleteStr, (void *) &ARIALUNI_18)) / 2;
+				TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)DeleteStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)DeleteStr));
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)ErrorStr));
 			break;
 
 		case FORMAT_ERROR:
-				TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)FormatStr, (void *) &ARIALUNI_18)) / 2;
+				TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)FormatStr, (void *) &ARIALUNI_18)) / 2;
 				WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)FormatStr));
-				TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
+				TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)ErrorStr, (void *) &ARIALUNI_18)) / 2;
 				WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)ErrorStr));
 			break;
 
 		case FILE_ALREADY_EXISTS:
-				TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)FileStr, (void *) &ARIALUNI_18)) / 2;
+				TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)FileStr, (void *) &ARIALUNI_18)) / 2;
 		    	WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)FileStr));
-		    	TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)AlreadyExistsStr, (void *) &ARIALUNI_18)) / 2;
+		    	TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)AlreadyExistsStr, (void *) &ARIALUNI_18)) / 2;
 		    	WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)AlreadyExistsStr));
 			break;
 
 		case UNSUPPORTED_FORMAT:
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)UnsupportedStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)UnsupportedStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)UnsupportedStr));
-    			TextX = (IMG_SCREEN_WIDTH - GetTextWidth((XCHAR *)FormatStr, (void *) &ARIALUNI_18)) / 2;
+    			TextX = (BSP_LCD_GetXSize() - GetTextWidth((XCHAR *)FormatStr, (void *) &ARIALUNI_18)) / 2;
     			WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY + 2 * TextHeight, (XCHAR *)FormatStr));
 			break;
 
@@ -1328,7 +1350,10 @@ void    MonitorDriveMedia(void) {
 		FillNewElements();
 	}
 
-	mediaPresentNow = (!disk_status (1) && USBH_GetActiveClass(&hUSBHost) == USB_MSC_CLASS) ? 1 : 0;
+	if(USBH_GetActiveClass(&hUSBHost[1]) == USB_MSC_CLASS)
+		mediaPresentNow = !disk_status (1);
+	else
+		mediaPresentNow = mediaPresent[1];
 
 	if(mediaPresentNow != mediaPresent[1])
 	{
@@ -1356,6 +1381,44 @@ void    MonitorDriveMedia(void) {
 		{
 			mediaPresent[1] = FALSE;
 			volume[1].valid = FALSE;
+		}
+
+		bShowVolumes = TRUE;
+
+		FillNewElements();
+	}
+
+	if(USBH_GetActiveClass(&hUSBHost[2]) == USB_MSC_CLASS)
+		mediaPresentNow = !disk_status (2);
+	else
+		mediaPresentNow = mediaPresent[2];
+
+	if(mediaPresentNow != mediaPresent[2])
+	{
+		if(mediaPresentNow)
+		{
+			if( disk.drv[2]->disk_initialize(disk.lun[2]) != STA_NOINIT )
+			{
+				if( f_mount(&FatFs[2], (TCHAR const*)Path3, 1) == FR_OK )
+				{
+					mediaPresent[2] = TRUE;
+					strcpy(volume[2].label, Path3);
+					volume[2].valid = TRUE;
+				}
+				else
+				{
+					mediaPresent[2] = FALSE;
+				}
+			}
+			else
+			{
+				mediaPresent[2] = FALSE;
+			}
+		}
+		else
+		{
+			mediaPresent[2] = FALSE;
+			volume[2].valid = FALSE;
 		}
 
 		bShowVolumes = TRUE;
@@ -1578,6 +1641,8 @@ BYTE AutoPlay(void)
 	NextFile++;
 	if(NextFile >= bNumElementsInFolder)
 	{
+		BSP_LCD_SetLayerVisible(1, ENABLE);
+
 		NextFile = 0;
 		bAutoPlay = FALSE;
 
@@ -1611,7 +1676,7 @@ void SetAudioCtrls(BOOL Set)
         SetState(pListBox, LB_DISABLED); SetState(pSlider, SLD_DISABLED);
         SetState(pBtnUp, BTN_DISABLED); SetState(pBtnDn, BTN_DISABLED);
 
-        GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+        GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 	}
 	else
 	{
@@ -1626,7 +1691,7 @@ void SetAudioCtrls(BOOL Set)
 		ClrState(pListBox, LB_DISABLED); ClrState(pSlider, SLD_DISABLED);
 		ClrState(pBtnUp, BTN_DISABLED); ClrState(pBtnDn, BTN_DISABLED);
 
-		GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+		GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 	}
 }
 
@@ -1645,7 +1710,7 @@ void SetFileCtrls(BOOL Set)
 		ClrState(pBtnA, BTN_DISABLED); ClrState(pBtnB, BTN_DISABLED);
 		ClrState(pBtnD, BTN_DISABLED);
 
-		GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+		GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 	}
 	else
 	{
@@ -1655,7 +1720,7 @@ void SetFileCtrls(BOOL Set)
 		SetState(pBtnA, BTN_DISABLED); SetState(pBtnB, BTN_DISABLED);
 		SetState(pBtnC, BTN_DISABLED); SetState(pBtnD, BTN_DISABLED);
 
-		GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+		GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 	}
 }
 
@@ -1675,7 +1740,7 @@ void SetConfirmCtrls(BOOL Set)
 		/* Disable needless objs */
 		SetState(pBtnA, BTN_DISABLED); SetState(pBtnD, BTN_DISABLED);
 
-		GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+		GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 	}
 	else
 	{
@@ -1686,7 +1751,7 @@ void SetConfirmCtrls(BOOL Set)
 		/* Enable objs */
 		ClrState(pBtnA, BTN_DISABLED); ClrState(pBtnD, BTN_DISABLED);
 
-		GOLRedrawRec(0, 0, GetMaxX(), GetMaxY());
+		GOLRedrawRec(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize());
 	}
 }
 
@@ -1717,24 +1782,30 @@ void CopyFolderElement(FolderElement *Src, FolderElement *Dst)
 BYTE CopyFile(FIL *Src, FIL *Dst)
 {
 	PRIVATE BYTE *buf, str[] = {'I',0}, CopyProgr;
-	PRIVATE WORD bytesread, byteswrite, TextX, TextY, TextHeight;
+	PRIVATE WORD bytesread, byteswrite, TextX, TextY, TextHeight, copyBuffSize;
 
-	buf = (BYTE *) malloc(COPY_BUFF_SIZE);
+	uint8_t String[30] = {0}, LastString[30] = {0};
+
+	if(Dst->fs->drv == 0)
+		copyBuffSize = SLOW_BUFF_SIZE;
+	else
+		copyBuffSize = FAST_BUFF_SIZE;
+
+	buf = (BYTE *) malloc(copyBuffSize);
 	if(!buf)
 		return(200); /* Memory allocation error */
 
 	SetColor(WHITE);
 	ClearDevice();
 
-	SetColor(GREEN);
 	SetFont((void *) &ARIALUNI_18);
 
 	TextHeight = GetTextHeight((void *) &ARIALUNI_18);
-	TextY = (IMG_SCREEN_HEIGHT - 3 * TextHeight) / 2;
+	TextY = (BSP_LCD_GetYSize() - 3 * TextHeight) / 2;
 
 	do
 	{
-		if( f_read (Src, buf, COPY_BUFF_SIZE, &bytesread) != FR_OK )
+		if( f_read (Src, buf, copyBuffSize, &bytesread) != FR_OK )
 		{
 			free(buf);
 			return(READ_ERROR); // read error
@@ -1746,11 +1817,23 @@ BYTE CopyFile(FIL *Src, FIL *Dst)
 			return(WRITE_ERROR); // write error
 		}
 
-		CopyProgr = ( (double)Src->fptr / Src->fsize * 100 );
+		SetColor(WHITE);
+		WAIT_UNTIL_FINISH(OutTextXY( 0,
+									 BSP_LCD_GetYSize() / 3,
+									 (XCHAR *)LastString));
+		sprintf(String, "%.2f  /  %.2f  KB", (float)Src->fptr / 1024, (float)Src->fsize / 1024);
 
-		TextX = CopyProgr * ( (double)IMG_SCREEN_WIDTH / 100 );
+		SetColor(BLACK);
+		WAIT_UNTIL_FINISH(OutTextXY( 0,
+									 BSP_LCD_GetYSize() / 3,
+									 (XCHAR *)String));
+		memcpy(LastString, String, sizeof(LastString));
+
+		CopyProgr = ( (float)Src->fptr / Src->fsize * 100 );
+		TextX = CopyProgr * ( (float)BSP_LCD_GetXSize() / 100 );
 		WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)str));
-	}while(bytesread == COPY_BUFF_SIZE);
+	}
+	while(bytesread == copyBuffSize);
 
 	free(buf);
 	return(0); // success
@@ -1776,6 +1859,8 @@ BYTE CopyFolder(const char *pathSrc, const char *pathDst, const char *SrcName)
 		f_chdrive ("0:/");
 	if(pathDst[0] == '1')
 		f_chdrive ("1:/");
+	if(pathDst[0] == '2')
+		f_chdrive ("2:/");
 
 	if( f_chdir (pathDst) != FR_OK )
 		return(100); // read error
@@ -1802,6 +1887,8 @@ BYTE CopyFolder(const char *pathSrc, const char *pathDst, const char *SrcName)
 		f_chdrive ("0:/");
 	if(pathSrc[0] == '1')
 		f_chdrive ("1:/");
+	if(pathSrc[0] == '2')
+		f_chdrive ("2:/");
 
 	if( f_chdir (pathSrc) != FR_OK )
 		return(100); // read error
@@ -1827,6 +1914,8 @@ BYTE CopyFolder(const char *pathSrc, const char *pathDst, const char *SrcName)
 				f_chdrive ("0:/");
 			if(path2[0] == '1')
 				f_chdrive ("1:/");
+			if(path2[0] == '2')
+				f_chdrive ("2:/");
 
 			if( f_chdir (path2) != FR_OK )
 				return(100); // read error
@@ -1861,6 +1950,8 @@ BYTE CopyFolder(const char *pathSrc, const char *pathDst, const char *SrcName)
 				f_chdrive ("0:/");
 			if(pathSrc[0] == '1')
 				f_chdrive ("1:/");
+			if(pathSrc[0] == '2')
+				f_chdrive ("2:/");
 
 			if( f_chdir (pathSrc) != FR_OK )
 				return(100); // read error
@@ -1897,6 +1988,8 @@ BYTE CopyFolder(const char *pathSrc, const char *pathDst, const char *SrcName)
 				f_chdrive ("0:/");
 			if(pathSrc[0] == '1')
 				f_chdrive ("1:/");
+			if(pathSrc[0] == '2')
+				f_chdrive ("2:/");
 
 			if( f_chdir (pathSrc) != FR_OK )
 				return(100); // read error
@@ -1993,11 +2086,11 @@ void Bootloader_Process(FolderElement *obj)
 	SetColor(WHITE);
 	ClearDevice();
 
-	SetColor(GREEN);
+	SetColor(BLACK);
 	SetFont((void *) &ARIALUNI_18);
 
 	TextHeight = GetTextHeight((void *) &ARIALUNI_18);
-	TextY = (IMG_SCREEN_HEIGHT - 3 * TextHeight) / 2;
+	TextY = (BSP_LCD_GetYSize() - 3 * TextHeight) / 2;
 
 	/* Open file */
 	if(f_open(&fSrc, obj->Name, FA_READ) == FR_OK)
@@ -2042,9 +2135,9 @@ void Bootloader_Process(FolderElement *obj)
 					Bootloader_FlashNext(data);
 				}
 
-				CopyProgr = ( (double)f_tell(&fSrc) / f_size(&fSrc) * 100 );
+				CopyProgr = ( (float)f_tell(&fSrc) / f_size(&fSrc) * 100 );
 
-				TextX = CopyProgr * ( (double)IMG_SCREEN_WIDTH / 100 );
+				TextX = CopyProgr * ( (float)BSP_LCD_GetXSize() / 100 );
 				WAIT_UNTIL_FINISH(OutTextXY(TextX, TextY, (XCHAR *)str));
 			} while((fr == FR_OK) && (bytesread > 0));
 			Bootloader_FlashEnd();

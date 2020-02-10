@@ -197,7 +197,7 @@ uint32_t lcd_y_size = OTM8009A_800X480_HEIGHT;
 HDMI_FormatTypeDef HDMI_Format[2] =
 {
 /* HA   HS  HB  HF  VA   VS VB  VF  ASPECT                BPP */
-  {800, 62, 60, 30, 480, 6, 19, 9, HDMI_ASPECT_RATIO_4_3, LCD_DSI_PIXEL_DATA_FMT_RBG888},
+  {720, 62, 60, 30, 480, 6, 19, 9, HDMI_ASPECT_RATIO_4_3, LCD_DSI_PIXEL_DATA_FMT_RBG888},
   {720, 64, 68, 12, 576, 5, 39, 5, HDMI_ASPECT_RATIO_16_9, LCD_DSI_PIXEL_DATA_FMT_RBG888}
 
 };
@@ -208,7 +208,7 @@ HDMI_FormatTypeDef HDMI_Format[2] =
 HDMI_DSIPacketTypeDef HDMI_DSIPacket[2] =
 {
   /* NP NC VP */
-  {0, 1, 800},
+  {0, 1, 720},
   {0, 1, 720}
 };
 
@@ -644,8 +644,8 @@ uint8_t BSP_LCD_HDMIInitEx(uint8_t format)
 
   /* background value */
   hltdc_discovery.Init.Backcolor.Blue = 0x00;
-  hltdc_discovery.Init.Backcolor.Green = 0xFF;
-  hltdc_discovery.Init.Backcolor.Red = 0xFF;
+  hltdc_discovery.Init.Backcolor.Green = 0x00;
+  hltdc_discovery.Init.Backcolor.Red = 0x00;
 
   /* Polarity */
   hltdc_discovery.Init.HSPolarity = LTDC_HSPOLARITY_AL;

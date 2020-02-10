@@ -58,28 +58,28 @@ static DWORD scratch[_MAX_SS / 4];
 #endif
 
 /* Private function prototypes -----------------------------------------------*/
-DSTATUS USBH_initialize (BYTE);
-DSTATUS USBH_status (BYTE);
-DRESULT USBH_read (BYTE, BYTE*, DWORD, UINT);
+DSTATUS USBH_2_initialize (BYTE);
+DSTATUS USBH_2_status (BYTE);
+DRESULT USBH_2_read (BYTE, BYTE*, DWORD, UINT);
 
 #if _USE_WRITE == 1
-  DRESULT USBH_write (BYTE, const BYTE*, DWORD, UINT);
+  DRESULT USBH_2_write (BYTE, const BYTE*, DWORD, UINT);
 #endif /* _USE_WRITE == 1 */
 
 #if _USE_IOCTL == 1
-  DRESULT USBH_ioctl (BYTE, BYTE, void*);
+  DRESULT USBH_2_ioctl (BYTE, BYTE, void*);
 #endif /* _USE_IOCTL == 1 */
   
-const Diskio_drvTypeDef  USBH_Driver =
+const Diskio_drvTypeDef  USBH_2_Driver =
 {
-  USBH_initialize,
-  USBH_status,
-  USBH_read, 
+		USBH_2_initialize,
+		USBH_2_status,
+		USBH_2_read,
 #if  _USE_WRITE == 1
-  USBH_write,
+		USBH_2_write,
 #endif /* _USE_WRITE == 1 */  
 #if  _USE_IOCTL == 1
-  USBH_ioctl,
+		USBH_2_ioctl,
 #endif /* _USE_IOCTL == 1 */
 };
 
@@ -90,10 +90,10 @@ const Diskio_drvTypeDef  USBH_Driver =
   * @param  lun : lun id
   * @retval DSTATUS: Operation status
   */
-DSTATUS USBH_initialize(BYTE lun)
+DSTATUS USBH_2_initialize(BYTE lun)
 {
 	USBH_StatusTypeDef   error;
-	USBH_HandleTypeDef	 *phost = &hUSBHost[1];
+	USBH_HandleTypeDef	 *phost = &hUSBHost[2];
 
    	do
 	{
@@ -109,14 +109,14 @@ DSTATUS USBH_initialize(BYTE lun)
   * @param  lun : lun id
   * @retval DSTATUS: Operation status
   */
-DSTATUS USBH_status(BYTE lun)
+DSTATUS USBH_2_status(BYTE lun)
 {
   DRESULT res = RES_ERROR;
   
-  while(USBH_GetActiveClass(&hUSBHost[1]) != USB_MSC_CLASS)
+  while(USBH_GetActiveClass(&hUSBHost[2]) != USB_MSC_CLASS)
   	HUB_Process();
 
-  if(USBH_MSC_UnitIsReady(&hUSBHost[1], lun))
+  if(USBH_MSC_UnitIsReady(&hUSBHost[2], lun))
   {
     res = RES_OK;
   }
@@ -136,13 +136,13 @@ DSTATUS USBH_status(BYTE lun)
   * @param  count: Number of sectors to read (1..128)
   * @retval DRESULT: Operation result
   */
-DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
+DRESULT USBH_2_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
   MSC_LUNTypeDef info;
   USBH_StatusTypeDef  status = USBH_OK;
 
-  while(USBH_GetActiveClass(&hUSBHost[1]) != USB_MSC_CLASS)
+  while(USBH_GetActiveClass(&hUSBHost[2]) != USB_MSC_CLASS)
   	HUB_Process();
 
   if ((DWORD)buff & 3) /* DMA Alignment issue, do single up to aligned buffer */
@@ -150,7 +150,7 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 #if _USE_BUFF_WO_ALIGNMENT == 0
     while ((count--)&&(status == USBH_OK))
     {
-      status = USBH_MSC_Read(&hUSBHost[1], lun, sector + count, (uint8_t *)scratch, 1);
+      status = USBH_MSC_Read(&hUSBHost[2], lun, sector + count, (uint8_t *)scratch, 1);
       if(status == USBH_OK)
       {
         memcpy (&buff[count * _MAX_SS] ,scratch, _MAX_SS);
@@ -166,7 +166,7 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    status = USBH_MSC_Read(&hUSBHost[1], lun, sector, buff, count);
+    status = USBH_MSC_Read(&hUSBHost[2], lun, sector, buff, count);
   }
   
   if(status == USBH_OK)
@@ -175,7 +175,7 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    USBH_MSC_GetLUNInfo(&hUSBHost[1], lun, &info);
+    USBH_MSC_GetLUNInfo(&hUSBHost[2], lun, &info);
     
     switch (info.sense.asc)
     {
@@ -204,13 +204,13 @@ DRESULT USBH_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_WRITE == 1
-DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
+DRESULT USBH_2_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR; 
   MSC_LUNTypeDef info;
   USBH_StatusTypeDef  status = USBH_OK;
 
-  while(USBH_GetActiveClass(&hUSBHost[1]) != USB_MSC_CLASS)
+  while(USBH_GetActiveClass(&hUSBHost[2]) != USB_MSC_CLASS)
   	HUB_Process();
 
   if ((DWORD)buff & 3) /* DMA Alignment issue, do single up to aligned buffer */
@@ -220,7 +220,7 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
     {
       memcpy (scratch, &buff[count * _MAX_SS], _MAX_SS);
       
-      status = USBH_MSC_Write(&hUSBHost[1], lun, sector + count, (BYTE *)scratch, 1) ;
+      status = USBH_MSC_Write(&hUSBHost[2], lun, sector + count, (BYTE *)scratch, 1) ;
       if(status == USBH_FAIL)
       {
         break;
@@ -232,7 +232,7 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    status = USBH_MSC_Write(&hUSBHost[1], lun, sector, (BYTE *)buff, count);
+    status = USBH_MSC_Write(&hUSBHost[2], lun, sector, (BYTE *)buff, count);
   }
   
   if(status == USBH_OK)
@@ -241,7 +241,7 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   }
   else
   {
-    USBH_MSC_GetLUNInfo(&hUSBHost[1], lun, &info);
+    USBH_MSC_GetLUNInfo(&hUSBHost[2], lun, &info);
     
     switch (info.sense.asc)
     {
@@ -275,12 +275,12 @@ DRESULT USBH_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
   * @retval DRESULT: Operation result
   */
 #if _USE_IOCTL == 1
-DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
+DRESULT USBH_2_ioctl(BYTE lun, BYTE cmd, void *buff)
 {
   DRESULT res = RES_ERROR;
   MSC_LUNTypeDef info;
   
-  while(USBH_GetActiveClass(&hUSBHost[1]) != USB_MSC_CLASS)
+  while(USBH_GetActiveClass(&hUSBHost[2]) != USB_MSC_CLASS)
   	HUB_Process();
 
   switch (cmd)
@@ -292,7 +292,7 @@ DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
     
   /* Get number of sectors on the disk (DWORD) */  
   case GET_SECTOR_COUNT : 
-    if(USBH_MSC_GetLUNInfo(&hUSBHost[1], lun, &info) == USBH_OK)
+    if(USBH_MSC_GetLUNInfo(&hUSBHost[2], lun, &info) == USBH_OK)
     {
       *(DWORD*)buff = info.capacity.block_nbr;
       res = RES_OK;
@@ -305,7 +305,7 @@ DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
     
   /* Get R/W sector size (WORD) */  
   case GET_SECTOR_SIZE :	
-    if(USBH_MSC_GetLUNInfo(&hUSBHost[1], lun, &info) == USBH_OK)
+    if(USBH_MSC_GetLUNInfo(&hUSBHost[2], lun, &info) == USBH_OK)
     {
       *(DWORD*)buff = info.capacity.block_size;
       res = RES_OK;
@@ -319,7 +319,7 @@ DRESULT USBH_ioctl(BYTE lun, BYTE cmd, void *buff)
     /* Get erase block size in unit of sector (DWORD) */ 
   case GET_BLOCK_SIZE : 
     
-    if(USBH_MSC_GetLUNInfo(&hUSBHost[1], lun, &info) == USBH_OK)
+    if(USBH_MSC_GetLUNInfo(&hUSBHost[2], lun, &info) == USBH_OK)
     {
       *(DWORD*)buff = info.capacity.block_size;
       res = RES_OK;

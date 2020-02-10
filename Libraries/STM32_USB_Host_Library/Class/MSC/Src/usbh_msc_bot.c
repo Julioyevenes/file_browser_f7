@@ -151,7 +151,7 @@ USBH_StatusTypeDef USBH_MSC_BOT_REQ_GetMaxLUN(USBH_HandleTypeDef *phost, uint8_t
 USBH_StatusTypeDef USBH_MSC_BOT_Init(USBH_HandleTypeDef *phost)
 {
   
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   MSC_Handle->hbot.cbw.field.Signature = BOT_CBW_SIGNATURE;
   MSC_Handle->hbot.cbw.field.Tag = BOT_CBW_TAG;
@@ -176,7 +176,7 @@ USBH_StatusTypeDef USBH_MSC_BOT_Process (USBH_HandleTypeDef *phost, uint8_t lun)
   USBH_StatusTypeDef   error  = USBH_BUSY;  
   BOT_CSWStatusTypeDef CSW_Status = BOT_CSW_CMD_FAILED;
   USBH_URBStateTypeDef URB_Status = USBH_URB_IDLE;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   uint8_t toggle = 0;
   
   switch (MSC_Handle->hbot.state)
@@ -475,7 +475,7 @@ USBH_StatusTypeDef USBH_MSC_BOT_Process (USBH_HandleTypeDef *phost, uint8_t lun)
 static USBH_StatusTypeDef USBH_MSC_BOT_Abort(USBH_HandleTypeDef *phost, uint8_t lun, uint8_t dir)
 {
   USBH_StatusTypeDef status = USBH_FAIL;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   switch (dir)
   {
@@ -513,7 +513,7 @@ static USBH_StatusTypeDef USBH_MSC_BOT_Abort(USBH_HandleTypeDef *phost, uint8_t 
 
 static BOT_CSWStatusTypeDef USBH_MSC_DecodeCSW(USBH_HandleTypeDef *phost)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   BOT_CSWStatusTypeDef status = BOT_CSW_CMD_FAILED;
   
     /*Checking if the transfer length is different than 13*/    

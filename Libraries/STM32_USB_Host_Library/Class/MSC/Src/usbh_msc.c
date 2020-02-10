@@ -137,8 +137,22 @@ USBH_ClassTypeDef  USBH_msc =
 
 /** @defgroup USBH_MSC_CORE_Private_Functions
   * @{
-  */ 
+  */
 
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+static MSC_HandleTypeDef *USBH_MSC_CreateHandle(USBH_HandleTypeDef *phost)
+{
+	phost->USBH_ClassTypeDef_pData[phost->interfaces] = (MSC_HandleTypeDef *) USBH_malloc(sizeof(MSC_HandleTypeDef));
+	memset(phost->USBH_ClassTypeDef_pData[phost->interfaces], 0, sizeof(MSC_HandleTypeDef));
+	MSC_HandleTypeDef *p = (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->interfaces];
+	phost->interfaces++;
+
+	return p;
+}
 
 /**
   * @brief  USBH_MSC_InterfaceInit 
@@ -147,83 +161,131 @@ USBH_ClassTypeDef  USBH_msc =
   * @retval USBH Status
   */
 static USBH_StatusTypeDef USBH_MSC_InterfaceInit (USBH_HandleTypeDef *phost)
-{	 
-  uint8_t interface = 0; 
-  USBH_StatusTypeDef status = USBH_FAIL ;
-  MSC_HandleTypeDef *MSC_Handle;
-  
-  interface = USBH_FindInterface(phost, phost->pActiveClass->ClassCode, MSC_TRANSPARENT, MSC_BOT);
-  
-  if(interface == 0xFF) /* Not Valid Interface */
-  {
-    USBH_DbgLog ("Cannot Find the interface for %s class.", phost->pActiveClass->Name);
-    status = USBH_FAIL;      
-  }
-  else
-  {
-    USBH_SelectInterface (phost, interface);
-    
-    phost->pActiveClass->pData = (MSC_HandleTypeDef *)USBH_malloc (sizeof(MSC_HandleTypeDef));
-    MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
-    
-    if(phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[0].bEndpointAddress & 0x80)
-    {
-      MSC_Handle->InEp = (phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[0].bEndpointAddress);
-      MSC_Handle->InEpSize  = phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[0].wMaxPacketSize;
-    }
-    else
-    {
-      MSC_Handle->OutEp = (phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[0].bEndpointAddress);
-      MSC_Handle->OutEpSize  = phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[0].wMaxPacketSize;      
-    }
-    
-    if(phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[1].bEndpointAddress & 0x80)
-    {
-      MSC_Handle->InEp = (phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[1].bEndpointAddress);
-      MSC_Handle->InEpSize  = phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[1].wMaxPacketSize;      
-    }
-    else
-    {
-      MSC_Handle->OutEp = (phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[1].bEndpointAddress);
-      MSC_Handle->OutEpSize  = phost->device.CfgDesc.Itf_Desc[phost->device.current_interface].Ep_Desc[1].wMaxPacketSize;      
-    }
-    
-    MSC_Handle->current_lun = 0;
-    MSC_Handle->rw_lun = 0;
-    MSC_Handle->state = MSC_INIT;
-    MSC_Handle->error = MSC_OK;
-    MSC_Handle->req_state = MSC_REQ_IDLE;
-    MSC_Handle->OutPipe = USBH_AllocPipe(phost, MSC_Handle->OutEp);
-    MSC_Handle->InPipe = USBH_AllocPipe(phost, MSC_Handle->InEp);
+{
+	USBH_StatusTypeDef status = USBH_BUSY;
 
-    USBH_MSC_BOT_Init(phost);
-    
-    /* De-Initialize LUNs information */
-    USBH_memset(MSC_Handle->unit, 0, sizeof(MSC_Handle->unit));
-    
-    /* Open the new channels */
-    USBH_OpenPipe  (phost,
-                    MSC_Handle->OutPipe,
-                    MSC_Handle->OutEp,
-                    phost->device.address,
-                    phost->device.speed,
-                    USB_EP_TYPE_BULK,
-                    MSC_Handle->OutEpSize);  
-    
-    USBH_OpenPipe  (phost,
-                    MSC_Handle->InPipe,
-                    MSC_Handle->InEp,
-                    phost->device.address,
-                    phost->device.speed,
-                    USB_EP_TYPE_BULK,
-                    MSC_Handle->InEpSize);     
-    
-    
-    USBH_LL_SetToggle  (phost, MSC_Handle->InPipe,0);
-    USBH_LL_SetToggle  (phost, MSC_Handle->OutPipe,0);
-    status = USBH_OK; 
-  }
-  return status;
+	static uint8_t if_ix = 0;
+	static uint8_t itfnum = 0;
+	static uint8_t state = 0;
+	static uint8_t num_itf = 0;
+
+	static USBH_InterfaceDescTypeDef *pif = (USBH_InterfaceDescTypeDef *)0;
+
+	static MSC_HandleTypeDef *MSC_Handle = 0;
+
+	USBH_CfgDescTypeDef *pcfg = &phost->device.CfgDesc;
+
+	switch(state)
+	{
+		case 0:
+			if_ix = 0;
+			pif = (USBH_InterfaceDescTypeDef *)0;
+			num_itf = phost->device.CfgDesc.bNumInterfaces;
+
+			if(phost->device.CfgDesc.bNumInterfaces > USBH_MAX_NUM_INTERFACES)
+				num_itf = USBH_MAX_NUM_INTERFACES;
+
+			state = 1;
+			break;
+
+		case 1:
+			MSC_Handle = NULL;
+			itfnum = phost->device.CfgDesc.Itf_Desc[if_ix].bInterfaceNumber;
+
+			USBH_SelectInterface(phost, itfnum);
+
+			state = 2;
+			break;
+
+		case 2:
+			state = 3;
+			break;
+
+		case 3:
+			MSC_Handle = USBH_MSC_CreateHandle(phost);
+
+			state = 4;
+			break;
+
+		case 4:
+			pif = &pcfg->Itf_Desc[if_ix];
+
+			if(MSC_Handle != NULL)
+			{
+				if(pif->Ep_Desc[0].bEndpointAddress & 0x80)
+				{
+					MSC_Handle->InEp = (pif->Ep_Desc[0].bEndpointAddress);
+					MSC_Handle->InEpSize  = pif->Ep_Desc[0].wMaxPacketSize;
+				}
+				else
+				{
+					MSC_Handle->OutEp = (pif->Ep_Desc[0].bEndpointAddress);
+					MSC_Handle->OutEpSize  = pif->Ep_Desc[0].wMaxPacketSize;
+				}
+
+				if(pif->Ep_Desc[1].bEndpointAddress & 0x80)
+				{
+					MSC_Handle->InEp = (pif->Ep_Desc[1].bEndpointAddress);
+					MSC_Handle->InEpSize  = pif->Ep_Desc[1].wMaxPacketSize;
+				}
+				else
+				{
+					MSC_Handle->OutEp = (pif->Ep_Desc[1].bEndpointAddress);
+					MSC_Handle->OutEpSize  = pif->Ep_Desc[1].wMaxPacketSize;
+				}
+
+				MSC_Handle->current_lun = 0;
+				MSC_Handle->rw_lun = 0;
+				MSC_Handle->state = MSC_INIT;
+				MSC_Handle->error = MSC_OK;
+				MSC_Handle->req_state = MSC_REQ_IDLE;
+				MSC_Handle->OutPipe = USBH_AllocPipe(phost, MSC_Handle->OutEp);
+				MSC_Handle->InPipe = USBH_AllocPipe(phost, MSC_Handle->InEp);
+
+				USBH_MSC_BOT_Init(phost);
+
+				/* De-Initialize LUNs information */
+				USBH_memset(MSC_Handle->unit, 0, sizeof(MSC_Handle->unit));
+
+				/* Open the new channels */
+				USBH_OpenPipe  (phost,
+								MSC_Handle->OutPipe,
+								MSC_Handle->OutEp,
+								phost->device.address,
+								phost->device.speed,
+								USB_EP_TYPE_BULK,
+								MSC_Handle->OutEpSize);
+
+				USBH_OpenPipe  (phost,
+								MSC_Handle->InPipe,
+								MSC_Handle->InEp,
+								phost->device.address,
+								phost->device.speed,
+								USB_EP_TYPE_BULK,
+								MSC_Handle->InEpSize);
+
+
+				USBH_LL_SetToggle  (phost, MSC_Handle->InPipe,0);
+				USBH_LL_SetToggle  (phost, MSC_Handle->OutPipe,0);
+			}
+
+			state = 1;
+
+			if(++if_ix >= num_itf)
+				state = 5;
+			break;
+
+		case 5:
+			USBH_SelectInterface(phost, phost->device.CfgDesc.Itf_Desc[0].bInterfaceNumber);
+
+			status = USBH_OK;
+
+			state = 0;
+			break;
+
+	}
+
+	return status;
 }
 
 /**
@@ -234,29 +296,35 @@ static USBH_StatusTypeDef USBH_MSC_InterfaceInit (USBH_HandleTypeDef *phost)
   */
 USBH_StatusTypeDef USBH_MSC_InterfaceDeInit (USBH_HandleTypeDef *phost)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+	uint8_t idx = 0;
 
-  if ( MSC_Handle->OutPipe)
-  {
-    USBH_ClosePipe(phost, MSC_Handle->OutPipe);
-    USBH_FreePipe  (phost, MSC_Handle->OutPipe);
-    MSC_Handle->OutPipe = 0;     /* Reset the Channel as Free */
-  }
-  
-  if ( MSC_Handle->InPipe)
-  {
-    USBH_ClosePipe(phost, MSC_Handle->InPipe);
-    USBH_FreePipe  (phost, MSC_Handle->InPipe);
-    MSC_Handle->InPipe = 0;     /* Reset the Channel as Free */
-  } 
+	for(; idx < phost->interfaces; ++idx)
+	{
+		MSC_HandleTypeDef *MSC_Handle = phost->USBH_ClassTypeDef_pData[idx];
 
-  if(phost->pActiveClass->pData)
-  {
-    USBH_free (phost->pActiveClass->pData);
-    phost->pActiveClass->pData = 0;
-  }
+  		if ( MSC_Handle->OutPipe)
+  		{
+    			USBH_ClosePipe(phost, MSC_Handle->OutPipe);
+    			USBH_FreePipe  (phost, MSC_Handle->OutPipe);
+    			MSC_Handle->OutPipe = 0;     /* Reset the Channel as Free */
+  		}
   
-  return USBH_OK;
+  		if ( MSC_Handle->InPipe)
+  		{
+    			USBH_ClosePipe(phost, MSC_Handle->InPipe);
+    			USBH_FreePipe  (phost, MSC_Handle->InPipe);
+    			MSC_Handle->InPipe = 0;     /* Reset the Channel as Free */
+  		}
+
+		if(phost->USBH_ClassTypeDef_pData[idx] != NULL)
+			USBH_free(phost->USBH_ClassTypeDef_pData[idx]);
+
+		phost->USBH_ClassTypeDef_pData[idx] = NULL;
+	}
+
+	phost->interfaces = 0;
+
+	return USBH_OK;
 }
 
 /**
@@ -268,7 +336,7 @@ USBH_StatusTypeDef USBH_MSC_InterfaceDeInit (USBH_HandleTypeDef *phost)
   */
 static USBH_StatusTypeDef USBH_MSC_ClassRequest(USBH_HandleTypeDef *phost)
 {   
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;  
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   USBH_StatusTypeDef status = USBH_BUSY;
   uint8_t i;
   
@@ -324,7 +392,7 @@ static USBH_StatusTypeDef USBH_MSC_ClassRequest(USBH_HandleTypeDef *phost)
   */
 static USBH_StatusTypeDef USBH_MSC_Process(USBH_HandleTypeDef *phost)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   USBH_StatusTypeDef error = USBH_BUSY ;
   USBH_StatusTypeDef scsi_status = USBH_BUSY ;  
   USBH_StatusTypeDef ready_status = USBH_BUSY ;
@@ -492,6 +560,7 @@ static USBH_StatusTypeDef USBH_MSC_Process(USBH_HandleTypeDef *phost)
     break;
 
   case MSC_IDLE:
+	phost->busy = 0;
     error = USBH_OK;  
     break;
     
@@ -510,7 +579,6 @@ static USBH_StatusTypeDef USBH_MSC_Process(USBH_HandleTypeDef *phost)
   */
 static USBH_StatusTypeDef USBH_MSC_SOFProcess(USBH_HandleTypeDef *phost)
 {
-
   return USBH_OK;
 }
 /**
@@ -522,7 +590,7 @@ static USBH_StatusTypeDef USBH_MSC_SOFProcess(USBH_HandleTypeDef *phost)
   */
 static USBH_StatusTypeDef USBH_MSC_RdWrProcess(USBH_HandleTypeDef *phost, uint8_t lun)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   USBH_StatusTypeDef error = USBH_BUSY ;
   USBH_StatusTypeDef scsi_status = USBH_BUSY ;  
   
@@ -616,7 +684,7 @@ static USBH_StatusTypeDef USBH_MSC_RdWrProcess(USBH_HandleTypeDef *phost, uint8_
   */
 uint8_t  USBH_MSC_IsReady (USBH_HandleTypeDef *phost)
 {
-    MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;  
+    MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
     
   if(phost->gState == HOST_CLASS)
   {
@@ -636,7 +704,7 @@ uint8_t  USBH_MSC_IsReady (USBH_HandleTypeDef *phost)
   */
 int8_t  USBH_MSC_GetMaxLUN (USBH_HandleTypeDef *phost)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;    
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   if ((phost->gState == HOST_CLASS) && (MSC_Handle->state == MSC_IDLE))
   {
@@ -654,7 +722,7 @@ int8_t  USBH_MSC_GetMaxLUN (USBH_HandleTypeDef *phost)
   */
 uint8_t  USBH_MSC_UnitIsReady (USBH_HandleTypeDef *phost, uint8_t lun)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;  
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   if(phost->gState == HOST_CLASS)
   {
@@ -675,7 +743,7 @@ uint8_t  USBH_MSC_UnitIsReady (USBH_HandleTypeDef *phost, uint8_t lun)
   */
 USBH_StatusTypeDef USBH_MSC_GetLUNInfo(USBH_HandleTypeDef *phost, uint8_t lun, MSC_LUNTypeDef *info)
 {
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;    
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   if(phost->gState == HOST_CLASS)
   {
     USBH_memcpy(info,&MSC_Handle->unit[lun], sizeof(MSC_LUNTypeDef));
@@ -704,7 +772,7 @@ USBH_StatusTypeDef USBH_MSC_Read(USBH_HandleTypeDef *phost,
                                      uint32_t length)
 {
   uint32_t timeout;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;   
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   if ((phost->device.is_connected == 0) || 
       (phost->gState != HOST_CLASS) || 
@@ -752,7 +820,7 @@ USBH_StatusTypeDef USBH_MSC_Write(USBH_HandleTypeDef *phost,
                                      uint32_t length)
 {
   uint32_t timeout;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;   
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   if ((phost->device.is_connected == 0) || 
       (phost->gState != HOST_CLASS) || 

@@ -52,7 +52,7 @@
 /* Private variables ---------------------------------------------------------*/
 __IO DWORD tick = 0;
 
-USBH_HandleTypeDef hUSBHost;
+USBH_HandleTypeDef hUSBHost[5], *phUSBHost = NULL;
 uint8_t host_state;
 
 /**
@@ -60,6 +60,7 @@ uint8_t host_state;
   */
 extern char Path1[];
 extern char Path2[];
+extern char Path3[];
 
 /**
   * @brief   Audio codec variables
@@ -82,6 +83,7 @@ static void MPU_Config(void);
 static void CPU_CACHE_Enable(void);
 
 void TouchGetMsg(GOL_MSG *pMsg);
+void HUB_Process(void);
 static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id);
 
 /* Private functions ---------------------------------------------------------*/
@@ -124,17 +126,25 @@ int main(void)
   FATFS_LinkDriver(&SD_Driver, Path1);
   disk_initialize (0);
 
+  memset(&hUSBHost[0], 0, sizeof(USBH_HandleTypeDef));
+
+  hUSBHost[0].valid   = 1;
+  hUSBHost[0].address = USBH_DEVICE_ADDRESS;
+  hUSBHost[0].Pipes   = USBH_malloc(sizeof(uint32_t) * USBH_MAX_PIPES_NBR);
+
   /* Init Host Library */
-  USBH_Init(&hUSBHost, USBH_UserProcess, 0);
+  USBH_Init(&hUSBHost[0], USBH_UserProcess, 0);
 
   /* Add Supported Class */
-  USBH_RegisterClass(&hUSBHost, USBH_MSC_CLASS);
-  USBH_RegisterClass(&hUSBHost, USBH_HID_CLASS);
+  USBH_RegisterClass(&hUSBHost[0], USBH_MSC_CLASS);
+  USBH_RegisterClass(&hUSBHost[0], USBH_HID_CLASS);
+  USBH_RegisterClass(&hUSBHost[0], USBH_HUB_CLASS);
 
   /* Start Host Process */
-  USBH_Start(&hUSBHost);
+  USBH_Start(&hUSBHost[0]);
 
   FATFS_LinkDriver(&USBH_Driver, Path2);
+  FATFS_LinkDriver(&USBH_2_Driver, Path3);
 
 #ifdef USE_TRANSPARENT_COLOR
   TransparentColorEnable(WHITE); // Define transparent color to be used
@@ -144,11 +154,64 @@ int main(void)
   while (1)
   {
 	  /* USB Host Background task */
-	  USBH_Process(&hUSBHost);
+	  HUB_Process();
 
       /* Graphic user interface */
       GOL_Procedures();
   }
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+void HUB_Process(void)
+{
+	static uint8_t current_port = -1;
+
+	if(phUSBHost != NULL && phUSBHost->valid == 1)
+	{
+		USBH_Process(phUSBHost);
+
+		if(phUSBHost->busy)
+			return;
+	}
+
+	for( ;; )
+	{
+		current_port++;
+
+		if(current_port > MAX_HUB_PORTS)
+			current_port = 0;
+
+		if(hUSBHost[current_port].valid)
+		{
+			phUSBHost = &hUSBHost[current_port];
+			USBH_LL_SetupEP0(phUSBHost);
+
+			if(phUSBHost->valid == 3)
+			{
+				phUSBHost->valid = 1;
+				phUSBHost->busy  = 1;
+			}
+
+			break;
+		}
+	}
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+uint8_t BSP_USB_IsDetected(void)
+{
+	if(USBH_GetActiveClass(phUSBHost) == USB_MSC_CLASS)
+		return !disk_status (1);
+	else
+		return 0;
 }
 
 /**
@@ -216,7 +279,7 @@ WORD GOLDrawCallback()
 
 	switch(screenState) {
 		case CREATE_FILEBROWSER:
-            if(BSP_SD_IsDetected() || !disk_status (1)) {
+            if(BSP_SD_IsDetected() || BSP_USB_IsDetected()) {
 				if(Create_fileBrowser() == 1)
 					screenState = DISPLAY_FILEBROWSER; // switch to next state
 				else
@@ -347,6 +410,7 @@ static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
     		break;
 
   	case HOST_USER_CLASS_ACTIVE:
+  			HAL_Delay(100);
   			host_state = HOST_USER_CLASS_ACTIVE;
     		break;
 
@@ -357,6 +421,21 @@ static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
   	default:
     		break;
   }
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+void HAL_Delay(__IO uint32_t Delay)
+{
+	uint32_t tick;
+
+	tick = (SystemCoreClock/1000) * Delay;
+	while(tick--)
+	{
+	}
 }
 
 /**

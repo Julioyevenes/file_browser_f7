@@ -148,7 +148,16 @@ WORD IsDeviceBusy() {
 	return(0);
 }
 
-#if (COLOR_DEPTH == 24)
+#if (COLOR_DEPTH == 16)
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+void ClearDevice(void) {
+    while(Bar(0, 0, BSP_LCD_GetXSize(), BSP_LCD_GetYSize()) == 0);
+}
+#elif (COLOR_DEPTH == 24)
 /**
   * @brief
   * @param

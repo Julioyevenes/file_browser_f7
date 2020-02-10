@@ -30,12 +30,37 @@
 #include "jmvplayer.h"
 #include "stm32f769i_discovery_audio.h"
 #include "diskio.h"
+#include "jpeg_hard_dec.h"
 
 /* Private types ------------------------------------------------------------*/
+typedef enum _OFFSET_TYPE
+{
+	MOVI = 0,
+	JPEG_SOI,
+	WB_DWORD
+} OFFSET_TYPE;
+
 /* Private constants --------------------------------------------------------*/
 /* Private macro ------------------------------------------------------------*/
 #define FRAME_BUFFER_PTR   ((uint32_t)0xC0000000)
 #define AUDIO_SIZE         (0xFFFFFFFF)
+
+#define JPEG_OUTPUT_DATA_BUFFER  0xC0200000
+#define JPEG_PROCESS_TIMEOUT 	 0xF6E
+
+#define PATTERN_SEARCH_BUFFERSIZE (512 * 4)
+
+#define JPEG_SOI_MARKER (0xE0FFD8FF) /* JPEG Start Of Image marker*/
+#define JPEG_SOI_MARKER_BYTE0 (JPEG_SOI_MARKER & 0xFF)
+#define JPEG_SOI_MARKER_BYTE1 ((JPEG_SOI_MARKER >> 8) & 0xFF)
+#define JPEG_SOI_MARKER_BYTE2 ((JPEG_SOI_MARKER >> 16) & 0xFF)
+#define JPEG_SOI_MARKER_BYTE3 ((JPEG_SOI_MARKER >> 24) & 0xFF)
+
+#define WB_DWORD_MARKER (0x62773130) /* AVI Start Of Audio marker*/
+#define WB_DWORD_BYTE0 (WB_DWORD_MARKER & 0xFF)
+#define WB_DWORD_BYTE1 ((WB_DWORD_MARKER >> 8) & 0xFF)
+#define WB_DWORD_BYTE2 ((WB_DWORD_MARKER >> 16) & 0xFF)
+#define WB_DWORD_BYTE3 ((WB_DWORD_MARKER >> 24) & 0xFF)
 
 /* Private variables --------------------------------------------------------*/
 __IO AUDIO_OUT_BufferTypeDef  jmvBufferCtl;
@@ -45,11 +70,18 @@ JMV_HEADER jmvHeader;
 uint32_t frame_buffer_size;
 uint32_t audio_buffer_size;
 
+JPEG_HandleTypeDef    	JPEG_Handle;
+JPEG_ConfTypeDef      	JPEG_Info;
+uint32_t 			  	JPEG_Timeout;
+uint32_t 				StreamOffset = 0;
+
+static uint8_t 			PatternSearchBuffer[PATTERN_SEARCH_BUFFERSIZE];
+
 extern AUDIO_PLAYBACK_StateTypeDef AudioState;
 extern __IO uint8_t volumeAudio;
 extern uint8_t error;
 
-extern USBH_HandleTypeDef hUSBHost;
+extern uint32_t Previous_FrameSize;
 
 /* Private function prototypes ----------------------------------------------*/
 BYTE JMV_PLAYER_Init(uint8_t Volume, uint32_t SampleRate);
@@ -58,6 +90,7 @@ BYTE JMV_PLAYER_Process(FIL *pFile);
 void JMV_PLAYER_FreeMemory(void);
 BYTE JMVRead(FIL *fp, DWORD buffSize, DWORD paddingBytes, DWORD *pBuff);
 WORD ReadChunk(FIL *fileStream, WORD numSectors, WORD paddingSectors, DWORD *add);
+static uint32_t FindOffset(uint32_t offset, FIL *pFile, OFFSET_TYPE OffsetType);
 
 /**
   * @brief  
@@ -139,10 +172,13 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 	if(JMVRead(pFile, sizeof(jmvHeader), 0, &jmvHeader))
 		return(100); // read error
 
-	BSP_LCD_SetLayerWindow(	0,
-							(BSP_LCD_GetXSize() - jmvHeader.frame_width) / 2,
-							(BSP_LCD_GetYSize() - jmvHeader.frame_height) / 2,
-							jmvHeader.frame_width, jmvHeader.frame_height );
+	if(!jmvHeader.frame_jpeg)
+	{
+		BSP_LCD_SetLayerWindow(	0,
+								(BSP_LCD_GetXSize() - jmvHeader.frame_width) / 2,
+								(BSP_LCD_GetYSize() - jmvHeader.frame_height) / 2,
+								jmvHeader.frame_width, jmvHeader.frame_height );
+	}
 
 	frame_buffer_size = jmvHeader.frame_width * \
 						jmvHeader.frame_height * \
@@ -163,13 +199,64 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 
 	jmvBufferCtl.state = BUFFER_OFFSET_NONE;
 
-	if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff))
-		return(100); // read error
+	if(jmvHeader.frame_jpeg)
+	{
+		StreamOffset = 0;
 
-	memcpy(jmvBufferCtl.pbuff + audio_buffer_size, jmvBufferCtl.pbuff, audio_buffer_size);
+		StreamOffset = FindOffset(StreamOffset, pFile, WB_DWORD);
+		f_lseek (pFile, StreamOffset + 4);
 
-	if(JMVRead(pFile, frame_buffer_size, 0, FRAME_BUFFER_PTR))
-		return(100); // read error
+		if( f_read (pFile, jmvBufferCtl.pbuff, audio_buffer_size, &bytesread) != FR_OK )
+			return(100); // read error
+
+		memcpy(jmvBufferCtl.pbuff + audio_buffer_size, jmvBufferCtl.pbuff, audio_buffer_size);
+
+		/* Init The JPEG Look Up Tables used for YCbCr to RGB conversion */
+		JPEG_InitColorTables();
+
+		/* Init the HAL JPEG driver */
+		JPEG_Handle.Instance = JPEG;
+		HAL_JPEG_Init(&JPEG_Handle);
+
+		StreamOffset = FindOffset(StreamOffset + audio_buffer_size, pFile, JPEG_SOI);
+		f_lseek (pFile, StreamOffset);
+
+		/* JPEG decoding with DMA (Not Blocking) Method */
+		JPEG_Decode_DMA(&JPEG_Handle, pFile);
+		JPEG_Timeout = JPEG_PROCESS_TIMEOUT;
+
+		/* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+		do
+		{
+			JPEG_Timeout--;
+			JPEG_InputHandler(&JPEG_Handle, pFile);
+		}while(JPEG_OutputHandler(&JPEG_Handle, JPEG_OUTPUT_DATA_BUFFER) == 0 && \
+		       JPEG_Timeout != 0);
+
+		/* Get JPEG Info */
+		HAL_JPEG_GetInfo(&JPEG_Handle, &JPEG_Info);
+
+		/* Initialize the DMA2D */
+		DMA2D_Init(JPEG_Info.ImageWidth, JPEG_Info.ImageHeight);
+
+		/* Copy the Decoded frame to the display frame buffer using the DMA2D */
+		DMA2D_CopyBuffer((uint32_t *)JPEG_OUTPUT_DATA_BUFFER,
+				 (uint32_t *)FRAME_BUFFER_PTR,
+				 (BSP_LCD_GetXSize() - JPEG_Info.ImageWidth)/2,
+				 (BSP_LCD_GetYSize() - JPEG_Info.ImageHeight)/2,
+				 JPEG_Info.ImageWidth,
+				 JPEG_Info.ImageHeight);
+	}
+	else
+	{
+		if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff))
+			return(100); // read error
+
+		memcpy(jmvBufferCtl.pbuff + audio_buffer_size, jmvBufferCtl.pbuff, audio_buffer_size);
+
+		if(JMVRead(pFile, frame_buffer_size, 0, FRAME_BUFFER_PTR))
+			return(100); // read error
+	}
 
 	AudioState = AUDIO_STATE_PLAY;
 
@@ -193,26 +280,112 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 		case AUDIO_STATE_PLAY:
 			if(jmvBufferCtl.state == BUFFER_OFFSET_HALF)
 			{
-				if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff))
-					return(100); // read error
-				if(JMVRead(pFile, frame_buffer_size, 0, FRAME_BUFFER_PTR))
-					return(100); // read error
+				if(jmvHeader.frame_jpeg)
+				{
+					StreamOffset = FindOffset(StreamOffset + Previous_FrameSize, pFile, WB_DWORD);
+					if(StreamOffset == 0) return(100); // read error
+					f_lseek (pFile, StreamOffset + 4);
+
+					if( f_read (pFile, jmvBufferCtl.pbuff, audio_buffer_size, &bytesread) != FR_OK )
+						return(100); // read error
+
+					StreamOffset = FindOffset(StreamOffset + audio_buffer_size, pFile, JPEG_SOI);
+					if(StreamOffset == 0) return(100); // read error
+					f_lseek (pFile, StreamOffset);
+
+					/* JPEG decoding with DMA (Not Blocking) Method */
+					JPEG_Decode_DMA(&JPEG_Handle, pFile);
+					JPEG_Timeout = JPEG_PROCESS_TIMEOUT;
+
+					/* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+					do
+					{
+						JPEG_Timeout--;
+						JPEG_InputHandler(&JPEG_Handle, pFile);
+					}while(JPEG_OutputHandler(&JPEG_Handle, JPEG_OUTPUT_DATA_BUFFER) == 0 && \
+					       JPEG_Timeout != 0);
+
+					if(JPEG_Timeout == 0)
+					{
+						HAL_JPEG_Abort(&JPEG_Handle);
+					}
+					else
+					{
+						/* Copy the Decoded frame to the display frame buffer using the DMA2D */
+						DMA2D_CopyBuffer((uint32_t *)JPEG_OUTPUT_DATA_BUFFER,
+								 (uint32_t *)FRAME_BUFFER_PTR,
+								 (BSP_LCD_GetXSize() - JPEG_Info.ImageWidth)/2,
+								 (BSP_LCD_GetYSize() - JPEG_Info.ImageHeight)/2,
+								 JPEG_Info.ImageWidth,
+								 JPEG_Info.ImageHeight);
+					}
+				}
+				else
+				{
+					if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff))
+						return(100); // read error
+					if(JMVRead(pFile, frame_buffer_size, 0, FRAME_BUFFER_PTR))
+						return(100); // read error
+				}
 
 				jmvBufferCtl.state = BUFFER_OFFSET_NONE;
 			}
 
 			if(jmvBufferCtl.state == BUFFER_OFFSET_FULL)
 			{
-				if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff + audio_buffer_size))
-					return(100); // read error
-				if(JMVRead(pFile, frame_buffer_size, 0, FRAME_BUFFER_PTR))
-					return(100); // read error
+				if(jmvHeader.frame_jpeg)
+				{
+					StreamOffset = FindOffset(StreamOffset + Previous_FrameSize, pFile, WB_DWORD);
+					if(StreamOffset == 0) return(100); // read error
+					f_lseek (pFile, StreamOffset + 4);
+
+					if( f_read (pFile, jmvBufferCtl.pbuff + audio_buffer_size, audio_buffer_size, &bytesread) != FR_OK )
+						return(100); // read error
+
+					StreamOffset = FindOffset(StreamOffset + audio_buffer_size, pFile, JPEG_SOI);
+					if(StreamOffset == 0) return(100); // read error
+					f_lseek (pFile, StreamOffset);
+
+					/* JPEG decoding with DMA (Not Blocking) Method */
+					JPEG_Decode_DMA(&JPEG_Handle, pFile);
+					JPEG_Timeout = JPEG_PROCESS_TIMEOUT;
+
+					/* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
+					do
+					{
+						JPEG_Timeout--;
+						JPEG_InputHandler(&JPEG_Handle, pFile);
+					}while(JPEG_OutputHandler(&JPEG_Handle, JPEG_OUTPUT_DATA_BUFFER) == 0 && \
+					       JPEG_Timeout != 0);
+
+					if(JPEG_Timeout == 0)
+					{
+						HAL_JPEG_Abort(&JPEG_Handle);
+					}
+					else
+					{
+						/* Copy the Decoded frame to the display frame buffer using the DMA2D */
+						DMA2D_CopyBuffer((uint32_t *)JPEG_OUTPUT_DATA_BUFFER,
+								 (uint32_t *)FRAME_BUFFER_PTR,
+								 (BSP_LCD_GetXSize() - JPEG_Info.ImageWidth)/2,
+								 (BSP_LCD_GetYSize() - JPEG_Info.ImageHeight)/2,
+								 JPEG_Info.ImageWidth,
+								 JPEG_Info.ImageHeight);
+					}
+				}
+				else
+				{
+					if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff + audio_buffer_size))
+						return(100); // read error
+					if(JMVRead(pFile, frame_buffer_size, 0, FRAME_BUFFER_PTR))
+						return(100); // read error
+				}
 
 				jmvBufferCtl.state = BUFFER_OFFSET_NONE;
 			}
 
 			/* USB Host Background task */
-			USBH_Process(&hUSBHost);
+			HUB_Process();
 
 #ifdef GFX_LIB
 			/* Graphic user interface */
@@ -240,7 +413,7 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
   		case AUDIO_STATE_INIT:
 		default:
 			/* USB Host Background task */
-			USBH_Process(&hUSBHost);
+			HUB_Process();
 
 #ifdef GFX_LIB
 			/* Graphic user interface */
@@ -418,6 +591,60 @@ WORD ReadChunk(FIL *fileStream, WORD numSectors, WORD paddingSectors, DWORD *add
 	}
 
 	return sectorsToRead;
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+static uint32_t FindOffset(uint32_t offset, FIL *pFile, OFFSET_TYPE OffsetType)
+{
+  uint32_t index = offset, i, readSize = 0;
+
+  do
+  {
+    if(pFile->fsize <=  (index + 1))
+    {
+      /* end of file reached*/
+      return 0;
+    }
+    f_lseek (pFile, index);
+    f_read (pFile, &PatternSearchBuffer, PATTERN_SEARCH_BUFFERSIZE, &readSize);
+
+    if(readSize != 0)
+    {
+      for(i = 0; i < (readSize - 1); i++)
+      {
+    	  switch(OffsetType)
+    	  {
+    	  	  case JPEG_SOI:
+    	  		  if( (PatternSearchBuffer[i] == JPEG_SOI_MARKER_BYTE0)     && \
+    	              (PatternSearchBuffer[i + 1] == JPEG_SOI_MARKER_BYTE1) && \
+    	              (PatternSearchBuffer[i + 2] == JPEG_SOI_MARKER_BYTE2) && \
+    	              (PatternSearchBuffer[i + 3] == JPEG_SOI_MARKER_BYTE3) )
+    	  		  {
+    	  			  return index + i;
+    	  		  }
+    	  	  	  break;
+
+    	  	  case WB_DWORD:
+    	  		  if( (PatternSearchBuffer[i] == WB_DWORD_BYTE0)     && \
+    	              (PatternSearchBuffer[i + 1] == WB_DWORD_BYTE1) && \
+    	              (PatternSearchBuffer[i + 2] == WB_DWORD_BYTE2) && \
+    	              (PatternSearchBuffer[i + 3] == WB_DWORD_BYTE3) )
+    	  		  {
+    	  			  return index + i;
+    	  		  }
+    	  	  	  break;
+    	  }
+      }
+
+      index +=  (readSize - 1);
+    }
+  }while(readSize != 0);
+
+  return 0;
 }
 
 #endif /* SUPPORT_JMV */

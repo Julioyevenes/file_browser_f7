@@ -69,6 +69,12 @@
 #include "usbh_core.h"
 #include "usbh_msc.h"
 #include "usbh_diskio.h"
+#include "usbh_2_diskio.h"
+
+/**
+  * @brief   Hub
+  */
+#include "usbh_hub.h"
 
 /**
   * @brief   Application
@@ -95,6 +101,7 @@ extern SCREEN_STATES screenState; 	// current state of main state machine
 
 /* Exported functions ------------------------------------------------------- */
 void GOL_Procedures(void);
+void HUB_Process(void);
 
 #endif /* __MAIN_H */
 

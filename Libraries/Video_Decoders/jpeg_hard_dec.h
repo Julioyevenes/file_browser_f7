@@ -25,43 +25,31 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __HARDWARE_PROFILE_H
-#define __HARDWARE_PROFILE_H
+#ifndef __JPEG_HARD_DEC_H
+#define __JPEG_HARD_DEC_H
 
 #ifdef __cplusplus
  extern "C" {
 #endif 
 
 /* Includes ------------------------------------------------------------------*/
+#include "jpeg_utils.h"
+#include "ff.h"
+
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
-
-/* Horizontal and vertical display resolution */
-#define DISP_HOR_RESOLUTION		720
-#define DISP_VER_RESOLUTION		480
-
-/* Image orientation (can be 0, 90, 180, 270 degrees). */
-#define DISP_ORIENTATION		0
-
-/* Panel Data Width */
-#define DISP_DATA_WIDTH         24
-
-/* Horizontal synchronization timing in pixels */
-#define DISP_HOR_PULSE_WIDTH	63  
-#define DISP_HOR_BACK_PORCH		120
-#define DISP_HOR_FRONT_PORCH	120	
-	
-/* Vertical synchronization timing in lines */
-#define DISP_VER_PULSE_WIDTH	12
-#define DISP_VER_BACK_PORCH		12	
-#define DISP_VER_FRONT_PORCH	12
-
 /* Exported variables --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
+BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile);
+BYTE JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg, uint32_t FrameBufferAddress);
+BYTE JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg, FIL *pFile);
+
+void DMA2D_Init(uint32_t ImageWidth, uint32_t ImageHeight);
+void DMA2D_CopyBuffer(uint32_t *pSrc, uint32_t *pDst, uint16_t xPos, uint16_t yPos, uint16_t ImageWidth, uint16_t ImageHeight);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __HARDWARE_PROFILE_H */
+#endif /* __JPEG_HARD_DEC_H */

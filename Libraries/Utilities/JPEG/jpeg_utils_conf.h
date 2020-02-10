@@ -1,10 +1,16 @@
 /**
   ******************************************************************************
-  * @file    Templates/Inc/stm32f7xx_it.h
+  * @file    jpeg_utils_conf_template.h
   * @author  MCD Application Team
-  * @version V1.0.0
-  * @date    22-April-2016
-  * @brief   This file contains the headers of the interrupt handlers.
+  * @version V2.0.0
+  * @date    3-June-2016
+  * @brief   jpeg_utils configuration template file.
+  *          This file should be copied to the application folder and modified 
+  *          as follows:
+  *            - Rename it to 'jpeg_utils_conf.h'.
+  *            - Update the name of the JPEG driver's header file, depending on
+  *               the EVAL board you are using, see lines 51 and 52 below (by default this  
+  *               file will generate compile error unless you do this modification).
   ******************************************************************************
   * @attention
   *
@@ -33,52 +39,47 @@
   * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   *
   ******************************************************************************
-  */
+  */ 
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __STM32F7xx_IT_H
-#define __STM32F7xx_IT_H
 
-#ifdef __cplusplus
- extern "C" {
-#endif 
+#ifndef  __JPEG_UTILS_CONF_H__
+#define  __JPEG_UTILS_CONF_H__
+
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f769i_discovery_sd.h"
-#include "stm32f769i_discovery_audio.h"
+#include "stm32f7xx_hal.h"
+#include "stm32f7xx_hal_jpeg.h"
 
+/* Private define ------------------------------------------------------------*/
+/** @addtogroup JPEG_Private_Defines
+  * @{
+  */
+/* RGB Color format definition for JPEG encoding/Decoding : Should not be modified*/
+#define JPEG_ARGB8888            0  /* ARGB8888 Color Format */
+#define JPEG_RGB888              1  /* RGB888 Color Format   */
+#define JPEG_RGB565              2  /* RGB565 Color Format   */
+    
+/**
+* @}
+*/
+    
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
+/** @addtogroup JPEG_Exported_Defines
+  * @{
+  */    
+#define USE_JPEG_DECODER     1  /* Enable Decoding Post-Processing functions (YCbCr to RGB conversion) */
+#define USE_JPEG_ENCODER     0  /* Enable Encoding Pre-Processing functions (RGB to YCbCr conversion)*/
+
+#define JPEG_RGB_FORMAT      JPEG_RGB565  /* Select RGB format: ARGB8888, RGB888, RBG_565 */
+#define JPEG_SWAP_RB         0  /* Change color order to BGR */
+
+/**
+* @}
+*/
+
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 
-void NMI_Handler(void);
-void HardFault_Handler(void);
-void MemManage_Handler(void);
-void BusFault_Handler(void);
-void UsageFault_Handler(void);
-void SVC_Handler(void);
-void DebugMon_Handler(void);
-void PendSV_Handler(void);
-void SysTick_Handler(void);
-void BSP_SDMMC_DMA_Rx_IRQHandler(void);
-void BSP_SDMMC_DMA_Tx_IRQHandler(void);
-void BSP_SDMMC_IRQHandler(void);
-void AUDIO_OUT_SAIx_DMAx_IRQHandler(void);
-#ifdef USE_USB_FS
-void OTG_FS_IRQHandler(void);
-#else
-void OTG_HS_IRQHandler(void);
-#endif
-void JPEG_IRQHandler(void);
-void DMA2_Stream3_IRQHandler(void);
-void DMA2_Stream4_IRQHandler(void);
-void DMA2D_IRQHandler(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* __STM32F7xx_IT_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+#endif /* __JPEG_UTILS_CONF_H__ */

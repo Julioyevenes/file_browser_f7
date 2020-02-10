@@ -59,8 +59,6 @@ extern __IO uint8_t volumeAudio;
 extern AUDIO_PLAYBACK_StateTypeDef AudioState;
 extern uint8_t error;
 
-extern USBH_HandleTypeDef hUSBHost;
-
 /* Private function prototypes ----------------------------------------------*/
 BYTE WAV_PLAYER_Init(uint8_t Volume, uint32_t SampleRate);
 BYTE WAV_PLAYER_Start(FIL *pFile);
@@ -210,7 +208,7 @@ BYTE WAV_PLAYER_Process(FIL *pFile)
 			}
 
 			/* USB Host Background task */
-			USBH_Process(&hUSBHost);
+			HUB_Process();
 
 #ifdef GFX_LIB
 			/* Graphic user interface */
@@ -238,7 +236,7 @@ BYTE WAV_PLAYER_Process(FIL *pFile)
   		case AUDIO_STATE_INIT:
 		default:
 			/* USB Host Background task */
-			USBH_Process(&hUSBHost);
+			HUB_Process();
 
 #ifdef GFX_LIB
 			/* Graphic user interface */

@@ -60,6 +60,8 @@ extern I2C_HandleTypeDef hI2cAudioHandler;
 extern SD_HandleTypeDef uSdHandle;
 extern SAI_HandleTypeDef haudio_out_sai;
 extern HCD_HandleTypeDef hhcd;
+extern JPEG_HandleTypeDef JPEG_Handle;
+extern DMA2D_HandleTypeDef DMA2D_Handle;
 
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
@@ -234,6 +236,46 @@ void OTG_HS_IRQHandler(void)
 #endif
 {
   HAL_HCD_IRQHandler(&hhcd);
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+void JPEG_IRQHandler(void)
+{
+	HAL_JPEG_IRQHandler(&JPEG_Handle);
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+void DMA2_Stream3_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(JPEG_Handle.hdmain);
+}
+
+/**
+  * @brief
+  * @param
+  * @retval
+  */
+void DMA2_Stream4_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(JPEG_Handle.hdmaout);
+}
+
+/**
+  * @brief  This function handles DMA2D interrupt request.
+  * @param  None
+  * @retval None
+  */
+void DMA2D_IRQHandler(void)
+{
+  HAL_DMA2D_IRQHandler(&DMA2D_Handle);
 }
 
 /**

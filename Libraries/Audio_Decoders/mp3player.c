@@ -62,8 +62,6 @@ AUDIOBUF audiobuf[MAX_AUDIOBUF_NUM] = { { NULL, -1, 1 },
 extern BYTE blAudioPlaying;
 extern __IO uint8_t volumeAudio;
 
-extern USBH_HandleTypeDef hUSBHost;
-
 /* Private function prototypes ----------------------------------------------*/
 BYTE MP3_PLAYER_Init(uint8_t Volume, uint32_t SampleRate);
 BYTE MP3_PLAYER_Start(FIL *pFile);
@@ -226,7 +224,7 @@ BYTE MP3_PLAYER_Process(FIL *pFile)
 			}
 
 			/* USB Host Background task */
-			USBH_Process(&hUSBHost);
+			HUB_Process();
 
 #ifdef GFX_LIB
 			/* Graphic user interface */
@@ -259,7 +257,7 @@ BYTE MP3_PLAYER_Process(FIL *pFile)
   		case AUDIO_STATE_INIT:
 		default:
 			/* USB Host Background task */
-			USBH_Process(&hUSBHost);
+			HUB_Process();
 
 #ifdef GFX_LIB
 			/* Graphic user interface */

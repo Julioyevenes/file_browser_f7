@@ -1,10 +1,10 @@
 /**
   ******************************************************************************
-  * @file    Templates/Inc/stm32f7xx_it.h
+  * @file    jpeg_utils.h  
   * @author  MCD Application Team
-  * @version V1.0.0
-  * @date    22-April-2016
-  * @brief   This file contains the headers of the interrupt handlers.
+  * @version V2.0.0
+  * @date    3-June-2016
+  * @brief   Header for jpeg_utils.c module
   ******************************************************************************
   * @attention
   *
@@ -36,49 +36,87 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __STM32F7xx_IT_H
-#define __STM32F7xx_IT_H
-
-#ifdef __cplusplus
- extern "C" {
-#endif 
+#ifndef __JPEG_UTILS_H
+#define __JPEG_UTILS_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f769i_discovery_sd.h"
-#include "stm32f769i_discovery_audio.h"
+#include "jpeg_utils_conf.h"
 
-/* Exported types ------------------------------------------------------------*/
-/* Exported constants --------------------------------------------------------*/
-/* Exported macro ------------------------------------------------------------*/
-/* Exported functions ------------------------------------------------------- */
+/** @addtogroup Utilities
+  * @{
+  */
 
-void NMI_Handler(void);
-void HardFault_Handler(void);
-void MemManage_Handler(void);
-void BusFault_Handler(void);
-void UsageFault_Handler(void);
-void SVC_Handler(void);
-void DebugMon_Handler(void);
-void PendSV_Handler(void);
-void SysTick_Handler(void);
-void BSP_SDMMC_DMA_Rx_IRQHandler(void);
-void BSP_SDMMC_DMA_Tx_IRQHandler(void);
-void BSP_SDMMC_IRQHandler(void);
-void AUDIO_OUT_SAIx_DMAx_IRQHandler(void);
-#ifdef USE_USB_FS
-void OTG_FS_IRQHandler(void);
-#else
-void OTG_HS_IRQHandler(void);
-#endif
-void JPEG_IRQHandler(void);
-void DMA2_Stream3_IRQHandler(void);
-void DMA2_Stream4_IRQHandler(void);
-void DMA2D_IRQHandler(void);
+/** @addtogroup JPEG
+  * @{
+  */
 
-#ifdef __cplusplus
-}
+/** @defgroup JPEG_Exported_Defines JPEG Exported Defines
+  * @{
+  */
+/**
+* @}
+*/
+
+/** @defgroup JPEG_Exported_Types JPEG Exported Types
+  * @{
+  */
+#if (USE_JPEG_DECODER == 1)
+typedef   uint32_t (* JPEG_YCbCrToRGB_Convert_Function)(uint8_t *pInBuffer, 
+                                      uint8_t *pOutBuffer,
+                                      uint32_t BlockIndex,
+                                      uint32_t DataCount,
+                                      uint32_t *ConvertedDataCount );
 #endif
 
-#endif /* __STM32F7xx_IT_H */
+#if (USE_JPEG_ENCODER == 1)                                      
+typedef   uint32_t (* JPEG_RGBToYCbCr_Convert_Function)(uint8_t *pInBuffer, 
+                                      uint8_t *pOutBuffer,
+                                      uint32_t BlockIndex,
+                                      uint32_t DataCount,
+                                      uint32_t *ConvertedDataCount );
+#endif
+/**
+* @}
+*/
+
+/** @defgroup JPEG_Exported_Macros JPEG Exported Macros
+  * @{
+  */ 
+/**
+* @}
+*/
+
+/** @defgroup JPEG_Exported_Variables JPEG Exported Variables
+  * @{
+  */
+/**
+* @}
+*/  
+
+/** @defgroup JPEG_Exported_FunctionsPrototype JPEG Exported FunctionsPrototype
+  * @{
+  */ 
+void JPEG_InitColorTables(void);
+
+#if (USE_JPEG_DECODER == 1)
+HAL_StatusTypeDef JPEG_GetDecodeColorConvertFunc(JPEG_ConfTypeDef *pJpegInfo, JPEG_YCbCrToRGB_Convert_Function *pFunction, uint32_t *ImageNbMCUs);
+#endif
+
+#if (USE_JPEG_ENCODER == 1)
+HAL_StatusTypeDef JPEG_GetEncodeColorConvertFunc(JPEG_ConfTypeDef *pJpegInfo, JPEG_RGBToYCbCr_Convert_Function *pFunction, uint32_t *ImageNbMCUs);
+#endif
+/**
+  * @}
+  */
+
+/**
+  * @}
+  */ 
+
+/**
+  * @}
+  */ 
+#endif /* __JPEG_UTILS_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+

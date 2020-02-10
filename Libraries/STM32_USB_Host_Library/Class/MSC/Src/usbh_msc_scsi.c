@@ -105,7 +105,7 @@ USBH_StatusTypeDef USBH_MSC_SCSI_TestUnitReady (USBH_HandleTypeDef *phost,
                                                 uint8_t lun)
 {
   USBH_StatusTypeDef    error = USBH_FAIL ;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   switch(MSC_Handle->hbot.cmd_state)
   {
@@ -148,7 +148,7 @@ USBH_StatusTypeDef USBH_MSC_SCSI_ReadCapacity (USBH_HandleTypeDef *phost,
                                                SCSI_CapacityTypeDef *capacity)
 {
   USBH_StatusTypeDef    error = USBH_BUSY ;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   switch(MSC_Handle->hbot.cmd_state)
   {
@@ -204,7 +204,7 @@ USBH_StatusTypeDef USBH_MSC_SCSI_Inquiry (USBH_HandleTypeDef *phost,
                                                SCSI_StdInquiryDataTypeDef *inquiry)
 {
   USBH_StatusTypeDef    error = USBH_FAIL ;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   switch(MSC_Handle->hbot.cmd_state)
   {
   case BOT_CMD_SEND:  
@@ -266,7 +266,7 @@ USBH_StatusTypeDef USBH_MSC_SCSI_RequestSense (USBH_HandleTypeDef *phost,
                                                SCSI_SenseTypeDef *sense_data)
 {
   USBH_StatusTypeDef    error = USBH_FAIL ;
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   switch(MSC_Handle->hbot.cmd_state)
   {
@@ -328,7 +328,7 @@ USBH_StatusTypeDef USBH_MSC_SCSI_Write(USBH_HandleTypeDef *phost,
 {
   USBH_StatusTypeDef    error = USBH_FAIL ;
 
-  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle =  (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   switch(MSC_Handle->hbot.cmd_state)
   {
@@ -388,7 +388,7 @@ USBH_StatusTypeDef USBH_MSC_SCSI_Read(USBH_HandleTypeDef *phost,
                                      uint32_t length)
 {
   USBH_StatusTypeDef    error = USBH_FAIL ;
-  MSC_HandleTypeDef *MSC_Handle = (MSC_HandleTypeDef *) phost->pActiveClass->pData;
+  MSC_HandleTypeDef *MSC_Handle = (MSC_HandleTypeDef *) phost->USBH_ClassTypeDef_pData[phost->device.current_interface];
   
   switch(MSC_Handle->hbot.cmd_state)
   {
