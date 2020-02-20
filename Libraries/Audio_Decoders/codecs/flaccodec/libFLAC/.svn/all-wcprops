@@ -1,0 +1,77 @@
+K 25
+svn:wc:ra_dav:version-url
+V 33
+/svn/!svn/ver/9/trunk/src/libFLAC
+END
+metadata_iterators.c
+K 25
+svn:wc:ra_dav:version-url
+V 54
+/svn/!svn/ver/2/trunk/src/libFLAC/metadata_iterators.c
+END
+lpc.c
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/9/trunk/src/libFLAC/lpc.c
+END
+fixed.c
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/2/trunk/src/libFLAC/fixed.c
+END
+stream_decoder.c
+K 25
+svn:wc:ra_dav:version-url
+V 50
+/svn/!svn/ver/9/trunk/src/libFLAC/stream_decoder.c
+END
+bitreader.c
+K 25
+svn:wc:ra_dav:version-url
+V 45
+/svn/!svn/ver/6/trunk/src/libFLAC/bitreader.c
+END
+float.c
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/6/trunk/src/libFLAC/float.c
+END
+md5.c
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/6/trunk/src/libFLAC/md5.c
+END
+metadata_object.c
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/2/trunk/src/libFLAC/metadata_object.c
+END
+crc.c
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/6/trunk/src/libFLAC/crc.c
+END
+format.c
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/!svn/ver/6/trunk/src/libFLAC/format.c
+END
+bitmath.c
+K 25
+svn:wc:ra_dav:version-url
+V 43
+/svn/!svn/ver/6/trunk/src/libFLAC/bitmath.c
+END
+memory.c
+K 25
+svn:wc:ra_dav:version-url
+V 42
+/svn/!svn/ver/6/trunk/src/libFLAC/memory.c
+END

@@ -1,0 +1,53 @@
+K 25
+svn:wc:ra_dav:version-url
+V 30
+/svn/!svn/ver/9/trunk/src/FLAC
+END
+stream_decoder.h
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/!svn/ver/2/trunk/src/FLAC/stream_decoder.h
+END
+metadata.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/2/trunk/src/FLAC/metadata.h
+END
+assert.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/2/trunk/src/FLAC/assert.h
+END
+export.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/2/trunk/src/FLAC/export.h
+END
+all.h
+K 25
+svn:wc:ra_dav:version-url
+V 36
+/svn/!svn/ver/9/trunk/src/FLAC/all.h
+END
+format.h
+K 25
+svn:wc:ra_dav:version-url
+V 39
+/svn/!svn/ver/2/trunk/src/FLAC/format.h
+END
+ordinals.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/2/trunk/src/FLAC/ordinals.h
+END
+callback.h
+K 25
+svn:wc:ra_dav:version-url
+V 41
+/svn/!svn/ver/2/trunk/src/FLAC/callback.h
+END

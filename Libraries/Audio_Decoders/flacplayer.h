@@ -25,47 +25,67 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __FILEBROWSER_H
-#define __FILEBROWSER_H
+#ifndef __FLAC_PLAYER_H
+#define __FLAC_PLAYER_H
 
 #ifdef __cplusplus
  extern "C" {
-#endif 
+#endif
+
+#ifdef SUPPORT_FLAC 
 
 /* Includes ------------------------------------------------------------------*/
-#include "GenericTypeDefs.h"
-#include "Graphics.h"
+#include "stm32f7xx_hal.h"
+#include "ff.h"
+#include "FLAC/stream_decoder.h"
 
 /* Exported types ------------------------------------------------------------*/
-/**
-  * @brief   Supported file extensions
-  */
- typedef enum _FILE_FORMAT
- {
- 	OTHER = 0,
- 	BMP_IMG,		/* Bitmap image */
- 	JPEG_IMG,		/* JPEG image */
- 	GIF_IMG,		/* GIF image */
- 	WAV,			/* WAV audio */
- 	MP3,			/* MP3 audio */
-	FLAC,			/* FLAC audio */
- 	JMV,			/* JMV video */
- 	BIN,            /* BIN executable */
- } FILE_FORMAT;
+typedef struct {
+	uint32_t *addr;
+	int32_t size;
+	uint8_t empty;
+}FLAC_BufferTypeDef;
+
+typedef struct {
+	uint32_t blocksize;
+	uint32_t channels;
+	uint32_t bps;
+}FLAC_FrameTypeDef;
+
+typedef struct {
+	FLAC__uint64 total_samples;
+	uint32_t sample_rate;
+	uint32_t channels;
+	uint32_t bps;
+}FLAC_MetadataTypeDef;
+
+#define MAX_AUDIOBUF_NUM	2
+
+typedef struct {
+	FIL *fp;
+	FLAC__StreamDecoder *decoder;
+	FLAC_FrameTypeDef frame;
+	FLAC_MetadataTypeDef metadata;
+	FLAC_BufferTypeDef buffer[MAX_AUDIOBUF_NUM];
+
+	uint8_t PlayingBufIdx;
+	uint8_t DecodeBufIdx;
+}FLAC_HandleTypeDef;
 
 /* Exported constants --------------------------------------------------------*/
+#define FLAC_AUDIOBUF_SIZE     	(0x9000)	/* 36864 byte */
+
 /* Exported macro ------------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
-extern char Path[];
+extern FLAC_HandleTypeDef hflac;
 
 /* Exported functions ------------------------------------------------------- */
-WORD    Create_fileBrowser(void);
-WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg);
-WORD    fileBrowser_DrawCallback(void);
-void    MonitorDriveMedia(void);
+BYTE FlacPlayBack(FIL *pFile);
+
+#endif /* SUPPORT_FLAC */
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __FILEBROWSER_H */
+#endif /* __FLAC_PLAYER_H */

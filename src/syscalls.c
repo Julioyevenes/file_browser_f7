@@ -1,7 +1,6 @@
 #include <sys/stat.h>
+#include <errno.h>
 #include "stm32f7xx_hal.h"
-
-int __errno;
 
 int _close(int file) {
 	return 0;
@@ -53,4 +52,16 @@ caddr_t _sbrk_r (struct _reent *r, int incr)
 
 int _write(int file, char *ptr, int len) {
 	return 0;
+}
+
+void _exit(int status) {
+}
+
+int _kill(int pid, int sig) {
+	errno = EINVAL;
+	return -1;
+}
+
+int _getpid(void) {
+	return 1;
 }

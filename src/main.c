@@ -118,6 +118,8 @@ int main(void)
   /* Configure the system clock to 216 MHz */
   SystemClock_Config();
 
+  BSP_LED_Init(LED1);
+
   /* Init routines */
   BSP_TS_Init(GetMaxX(), GetMaxY());
   GOLInit(); // initialize graphics library

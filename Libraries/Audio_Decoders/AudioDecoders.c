@@ -35,6 +35,9 @@
 #ifdef SUPPORT_JMV
 	#include "jmvplayer.h"
 #endif
+#ifdef SUPPORT_FLAC
+	#include "flacplayer.h"
+#endif
 
 /* Private types ------------------------------------------------------------*/
 /* Private constants --------------------------------------------------------*/
@@ -75,6 +78,9 @@ BYTE AudioPlayBack(FIL *pFile, FILE_FORMAT fileFormat) {
 #endif
 #ifdef SUPPORT_MP3
 		case MP3: 	bRetVal = MP3PlayBack(pFile); break;
+#endif
+#ifdef SUPPORT_FLAC
+		case FLAC: 	bRetVal = FlacPlayBack(pFile); break;
 #endif
 		default:    bRetVal = 0xFF;
 	}
@@ -131,6 +137,28 @@ if(bCallback == JMV) {
   	}
 }
 #endif /* SUPPORT_JMV */
+
+#ifdef SUPPORT_FLAC
+if(bCallback == FLAC) {
+  	if(AudioState == AUDIO_STATE_PLAY)
+  	{
+		/* Data in hflac.buffer[hflac.PlayingBufIdx] has been sent out */
+		hflac.buffer[hflac.PlayingBufIdx].empty = 1;
+		hflac.buffer[hflac.PlayingBufIdx].size = -1;
+
+		/* Send the data in next audio buffer */
+		hflac.PlayingBufIdx++;
+		if (hflac.PlayingBufIdx == MAX_AUDIOBUF_NUM)
+			hflac.PlayingBufIdx = 0;
+
+		if (hflac.buffer[hflac.PlayingBufIdx].empty == 1) {
+			/* If empty==1, it means read file+decoder is slower than playback
+		 	 (it will cause noise) or playback is over (it is ok). */;
+		 	BSP_LED_Toggle(LED1);
+		}
+  	}
+}
+#endif /* SUPPORT_FLAC */
 }
 
 /**
@@ -182,4 +210,26 @@ if(bCallback == JMV) {
   	}
 }
 #endif /* SUPPORT_JMV */
+
+#ifdef SUPPORT_FLAC
+if(bCallback == FLAC) {
+  	if(AudioState == AUDIO_STATE_PLAY)
+  	{
+		/* Data in hflac.buffer[hflac.PlayingBufIdx] has been sent out */
+		hflac.buffer[hflac.PlayingBufIdx].empty = 1;
+		hflac.buffer[hflac.PlayingBufIdx].size = -1;
+
+		/* Send the data in next audio buffer */
+		hflac.PlayingBufIdx++;
+		if (hflac.PlayingBufIdx == MAX_AUDIOBUF_NUM)
+			hflac.PlayingBufIdx = 0;
+
+		if (hflac.buffer[hflac.PlayingBufIdx].empty == 1) {
+			/* If empty==1, it means read file+decoder is slower than playback
+		 	 (it will cause noise) or playback is over (it is ok). */;
+		 	BSP_LED_Toggle(LED1);
+		}
+  	}
+}
+#endif /* SUPPORT_FLAC */
 }

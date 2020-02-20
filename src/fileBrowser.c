@@ -546,7 +546,8 @@ WORD    fileBrowser_MsgCallback(WORD objMsg, OBJ_HEADER *pObj, GOL_MSG *pMsg) {
 						}
 					}
 					else if(SelectElement.FmtType == WAV || \
-							SelectElement.FmtType == MP3)
+							SelectElement.FmtType == MP3 || \
+							SelectElement.FmtType == FLAC)
 					{
 						/* Enable the continuous playback */
 						bAutoPlay = TRUE;
@@ -959,7 +960,8 @@ WORD    fileBrowser_DrawCallback(void) {
     if(bAutoPlay && !bFileProcess)
     {
     	if(aFolderElement[NextFile].FmtType == WAV || \
-    	   aFolderElement[NextFile].FmtType == MP3)
+    	   aFolderElement[NextFile].FmtType == MP3 || \
+		   aFolderElement[NextFile].FmtType == FLAC)
     	{
     		if((tick - prevTick) > AUTOPLAYDELAY)
     		{
@@ -1196,6 +1198,10 @@ void FillNewElements(void) {
         else if(aFolderElement[bStartingElement + bCounter].FmtType == BMP_IMG)
         {
             pBitmap = (void *) &Picture;
+        }
+        else if(aFolderElement[bStartingElement + bCounter].FmtType == FLAC)
+        {
+            pBitmap = (void *) &Music;
         }
         else if(aFolderElement[bStartingElement + bCounter].FmtType == MP3)
         {
@@ -1540,6 +1546,10 @@ FILE_FORMAT getFileExt(FILINFO *finfo) {
 	else if(strstr(finfo->fname, ".JMV"))
 		Ext = JMV;
 #endif /* SUPPORT_JMV */
+#ifdef SUPPORT_FLAC
+	else if(strstr(finfo->fname, ".FLA"))
+		Ext = FLAC;
+#endif /* SUPPORT_FLAC */
 	else if(strstr(finfo->fname, ".BIN"))
 		Ext = BIN;
 	else
@@ -1600,7 +1610,8 @@ BYTE AutoPlay(void)
     bFileProcess = TRUE;
 
     if(aFolderElement[NextFile].FmtType == WAV || \
-	   aFolderElement[NextFile].FmtType == MP3)
+	   aFolderElement[NextFile].FmtType == MP3 || \
+	   aFolderElement[NextFile].FmtType == FLAC)
 	{
     	if( f_open (&fSrc, aFolderElement[NextFile].Name, FA_READ) == FR_OK )
 		{
