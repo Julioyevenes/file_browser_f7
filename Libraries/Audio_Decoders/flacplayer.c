@@ -171,6 +171,9 @@ BYTE FLAC_PLAYER_Start(FIL *pFile)
 	AudioBufPtr = (uint32_t *) malloc(FLAC_AUDIOBUF_SIZE);
 	if(!AudioBufPtr)
 		return(200); /* Memory allocation error */
+
+	/* Init first half pcm buffer */
+	hflac.buffer[AUDIOBUF0].addr = AudioBufPtr;
 	
 	/* Decode and playback from audio buf 0 */
 	hflac.DecodeBufIdx = hflac.PlayingBufIdx = AUDIOBUF0;
@@ -182,14 +185,13 @@ BYTE FLAC_PLAYER_Start(FIL *pFile)
 		/* Then decode the first audio frame */
 		FLAC__stream_decoder_process_single(hflac.decoder);
 
-		/* Then decode the second audio frame */
-		FLAC__stream_decoder_process_single(hflac.decoder);
-
 		pcmframe_size = hflac.frame.blocksize * hflac.frame.channels * (hflac.frame.bps / 8);
 
-		/* Init pcm buffer */
-		hflac.buffer[AUDIOBUF0].addr = AudioBufPtr;
+		/* Init second half pcm buffer */
 		hflac.buffer[AUDIOBUF1].addr = AudioBufPtr + (pcmframe_size / 4);
+
+		/* Then decode the second audio frame */
+		FLAC__stream_decoder_process_single(hflac.decoder);
 	}
 	else
 	{
