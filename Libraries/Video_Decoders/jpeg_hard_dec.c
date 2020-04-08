@@ -39,23 +39,19 @@ typedef struct
 
 /* Private constants --------------------------------------------------------*/
 /* Private macro ------------------------------------------------------------*/
-#define CHUNK_SIZE_IN  ((uint32_t)(4096)) 
 #define CHUNK_SIZE_OUT ((uint32_t)(768 * 4))
 
 #define JPEG_BUFFER_EMPTY 0
 #define JPEG_BUFFER_FULL  1
 
 #define NB_OUTPUT_DATA_BUFFERS      2
-#define NB_INPUT_DATA_BUFFERS       2
+#define NB_INPUT_DATA_BUFFERS       1
 
 /* Private variables --------------------------------------------------------*/
 JPEG_YCbCrToRGB_Convert_Function pConvert_Function;
 
 uint8_t MCU_Data_OutBuffer0[CHUNK_SIZE_OUT];
 uint8_t MCU_Data_OutBuffer1[CHUNK_SIZE_OUT];
-
-uint8_t JPEG_Data_InBuffer0[CHUNK_SIZE_IN];
-uint8_t JPEG_Data_InBuffer1[CHUNK_SIZE_IN];
 
 JPEG_Data_BufferTypeDef Jpeg_OUT_BufferTab[NB_OUTPUT_DATA_BUFFERS] =
 {
@@ -65,8 +61,7 @@ JPEG_Data_BufferTypeDef Jpeg_OUT_BufferTab[NB_OUTPUT_DATA_BUFFERS] =
 
 JPEG_Data_BufferTypeDef Jpeg_IN_BufferTab[NB_INPUT_DATA_BUFFERS] =
 {
-  {JPEG_BUFFER_EMPTY , JPEG_Data_InBuffer0, 0},
-  {JPEG_BUFFER_EMPTY , JPEG_Data_InBuffer1, 0}
+  {JPEG_BUFFER_EMPTY , 0, 0}
 };
 
 uint32_t MCU_TotalNb = 0;
@@ -76,13 +71,7 @@ uint32_t JPEG_OUT_Read_BufferIndex = 0;
 uint32_t JPEG_OUT_Write_BufferIndex = 0;
 __IO uint32_t Output_Is_Paused = 0;
 
-uint32_t JPEG_IN_Read_BufferIndex = 0;
-uint32_t JPEG_IN_Write_BufferIndex = 0;
-__IO uint32_t Input_Is_Paused = 0;
-
 DMA2D_HandleTypeDef DMA2D_Handle;
-
-__IO uint32_t Previous_FrameSize = 0;
 
 /* Private function prototypes ----------------------------------------------*/
 
@@ -91,11 +80,9 @@ __IO uint32_t Previous_FrameSize = 0;
   * @param  
   * @retval 
   */
-BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile)
+BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile, uint32_t *ReadBufferPtr, uint32_t ReadBufferSize)
 {
 	uint32_t i;
-	
-	Previous_FrameSize = 0;
 
 	MCU_TotalNb = 0;
 	MCU_BlockIndex = 0;
@@ -104,16 +91,13 @@ BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile)
 	JPEG_OUT_Write_BufferIndex = 0;
 	Output_Is_Paused = 0;
 
-	JPEG_IN_Read_BufferIndex = 0;
-	JPEG_IN_Write_BufferIndex = 0;
-	Input_Is_Paused = 0;
-
 	/* Init buffers */
-	for(i = 0; i < NB_INPUT_DATA_BUFFERS; i++)
-	{
-		Jpeg_IN_BufferTab[i].State = JPEG_BUFFER_EMPTY;
-		Jpeg_IN_BufferTab[i].DataBufferSize = 0;
+	Jpeg_IN_BufferTab[0].State = JPEG_BUFFER_EMPTY;
+	Jpeg_IN_BufferTab[0].DataBuffer = (uint8_t *) ReadBufferPtr;
+	Jpeg_IN_BufferTab[0].DataBufferSize = 0;
 
+	for(i = 0; i < NB_OUTPUT_DATA_BUFFERS; i++)
+	{
 		Jpeg_OUT_BufferTab[i].State = JPEG_BUFFER_EMPTY;
 		Jpeg_OUT_BufferTab[i].DataBufferSize = 0;
 	}
@@ -121,9 +105,10 @@ BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile)
 	/* Read and fill input buffers */
 	for(i = 0; i < NB_INPUT_DATA_BUFFERS; i++)
 	{
-		if(f_read (pFile, Jpeg_IN_BufferTab[i].DataBuffer , CHUNK_SIZE_IN, (UINT*)(&Jpeg_IN_BufferTab[i].DataBufferSize)) != FR_OK)
+		if(JMVRead(pFile, ReadBufferSize, 0, Jpeg_IN_BufferTab[i].DataBuffer))
 			return(100); // read error
 		else
+			Jpeg_IN_BufferTab[i].DataBufferSize = ReadBufferSize;
 			Jpeg_IN_BufferTab[i].State = JPEG_BUFFER_FULL;
 	}
 
@@ -183,40 +168,6 @@ BYTE JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg, uint32_t FrameBufferAddress)
   * @param  
   * @retval 
   */
-BYTE JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg, FIL *pFile)
-{
-	if(Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].State == JPEG_BUFFER_EMPTY)
-	{
-		if(f_read (pFile, Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].DataBuffer , CHUNK_SIZE_IN, (UINT*)(&Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].DataBufferSize)) != FR_OK)
-			return(100); // read error
-		else
-			Jpeg_IN_BufferTab[JPEG_IN_Write_BufferIndex].State = JPEG_BUFFER_FULL;
-
-		if((Input_Is_Paused == 1) && (JPEG_IN_Write_BufferIndex == JPEG_IN_Read_BufferIndex))
-    		{
-      			Input_Is_Paused = 0;
-      			HAL_JPEG_ConfigInputBuffer(hjpeg,
-						   Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBuffer, 
-						   Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize);    
-  
-      			HAL_JPEG_Resume(hjpeg, JPEG_PAUSE_RESUME_INPUT); 
-    		}
-
-		JPEG_IN_Write_BufferIndex++;
-    		if(JPEG_IN_Write_BufferIndex >= NB_INPUT_DATA_BUFFERS)
-    		{
-      			JPEG_IN_Write_BufferIndex = 0;
-    		} 
-	}
-
-	return(0); // success
-}
-
-/**
-  * @brief  
-  * @param  
-  * @retval 
-  */
 void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef *hjpeg, JPEG_ConfTypeDef *pInfo)
 {
 	if(JPEG_GetDecodeColorConvertFunc(pInfo, &pConvert_Function, &MCU_TotalNb) != HAL_OK)
@@ -232,37 +183,6 @@ void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef *hjpeg, JPEG_ConfTypeDef *pIn
   */
 void HAL_JPEG_GetDataCallback(JPEG_HandleTypeDef *hjpeg, uint32_t NbDecodedData)
 {
-	if(NbDecodedData == Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize)
-	{
-    		Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].State = JPEG_BUFFER_EMPTY;
-    		Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize = 0;
-  
-    		JPEG_IN_Read_BufferIndex++;
-    		if(JPEG_IN_Read_BufferIndex >= NB_INPUT_DATA_BUFFERS)
-    		{
-      			JPEG_IN_Read_BufferIndex = 0;        
-    		}
-  
-    		if(Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].State == JPEG_BUFFER_EMPTY)
-    		{
-      			HAL_JPEG_Pause(hjpeg, JPEG_PAUSE_RESUME_INPUT);
-      			Input_Is_Paused = 1;
-    		}
-    		else
-    		{    
-      			HAL_JPEG_ConfigInputBuffer(hjpeg,
-						   Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBuffer, 
-						   Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize);    
-    		}
-	}
-	else
-	{
-		HAL_JPEG_ConfigInputBuffer(hjpeg,
-					   Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBuffer + NbDecodedData, 
-					   Jpeg_IN_BufferTab[JPEG_IN_Read_BufferIndex].DataBufferSize - NbDecodedData); 
-	}
-
-	Previous_FrameSize += NbDecodedData;
 }
 
 /**

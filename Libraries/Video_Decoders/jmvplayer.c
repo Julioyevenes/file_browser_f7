@@ -33,55 +33,44 @@
 #include "jpeg_hard_dec.h"
 
 /* Private types ------------------------------------------------------------*/
-typedef enum _OFFSET_TYPE
-{
-	MOVI = 0,
-	JPEG_SOI,
-	WB_DWORD
-} OFFSET_TYPE;
+ typedef struct _FRAME_HEADER
+ {
+ 	/* video */
+ 	uint32_t frame_size;
+
+ 	/* padding */
+ 	uint8_t  pad[508];
+ } __attribute__ ((packed)) FRAME_HEADER;
 
 /* Private constants --------------------------------------------------------*/
 /* Private macro ------------------------------------------------------------*/
 #define FRAME_BUFFER_PTR   ((uint32_t)0xC0000000)
 #define AUDIO_SIZE         (0xFFFFFFFF)
 
-#define JPEG_OUTPUT_DATA_BUFFER  0xC0200000
-#define JPEG_PROCESS_TIMEOUT 	 0xF6E
-
-#define PATTERN_SEARCH_BUFFERSIZE (512 * 4)
-
-#define JPEG_SOI_MARKER (0xE0FFD8FF) /* JPEG Start Of Image marker*/
-#define JPEG_SOI_MARKER_BYTE0 (JPEG_SOI_MARKER & 0xFF)
-#define JPEG_SOI_MARKER_BYTE1 ((JPEG_SOI_MARKER >> 8) & 0xFF)
-#define JPEG_SOI_MARKER_BYTE2 ((JPEG_SOI_MARKER >> 16) & 0xFF)
-#define JPEG_SOI_MARKER_BYTE3 ((JPEG_SOI_MARKER >> 24) & 0xFF)
-
-#define WB_DWORD_MARKER (0x62773130) /* AVI Start Of Audio marker*/
-#define WB_DWORD_BYTE0 (WB_DWORD_MARKER & 0xFF)
-#define WB_DWORD_BYTE1 ((WB_DWORD_MARKER >> 8) & 0xFF)
-#define WB_DWORD_BYTE2 ((WB_DWORD_MARKER >> 16) & 0xFF)
-#define WB_DWORD_BYTE3 ((WB_DWORD_MARKER >> 24) & 0xFF)
+#define JPEG_OUTPUT_DATA_BUFFER  	0xC0200000
+#define JPEG_PROCESS_TIMEOUT 	 	0xFFFFFFFF
+#define JPEG_PROCESS_TIMEOUT_TRIM 	0x400
 
 /* Private variables --------------------------------------------------------*/
 __IO AUDIO_OUT_BufferTypeDef  jmvBufferCtl;
 BYTE blVideoPlaying = FALSE;
 
 JMV_HEADER jmvHeader;
+FRAME_HEADER FrameHeader;
 uint32_t frame_buffer_size;
 uint32_t audio_buffer_size;
+
+uint32_t *JPEG_ReadBufferPtr;
+uint32_t JPEG_ReadBufferSize;
 
 JPEG_HandleTypeDef    	JPEG_Handle;
 JPEG_ConfTypeDef      	JPEG_Info;
 uint32_t 			  	JPEG_Timeout;
-uint32_t 				StreamOffset = 0;
-
-static uint8_t 			PatternSearchBuffer[PATTERN_SEARCH_BUFFERSIZE];
+uint32_t 				JPEG_Opt_Timeout;
 
 extern AUDIO_PLAYBACK_StateTypeDef AudioState;
 extern __IO uint8_t volumeAudio;
 extern uint8_t error;
-
-extern uint32_t Previous_FrameSize;
 
 /* Private function prototypes ----------------------------------------------*/
 BYTE JMV_PLAYER_Init(uint8_t Volume, uint32_t SampleRate);
@@ -90,7 +79,6 @@ BYTE JMV_PLAYER_Process(FIL *pFile);
 void JMV_PLAYER_FreeMemory(void);
 BYTE JMVRead(FIL *fp, DWORD buffSize, DWORD paddingBytes, DWORD *pBuff);
 WORD ReadChunk(FIL *fileStream, WORD numSectors, WORD paddingSectors, DWORD *add);
-static uint32_t FindOffset(uint32_t offset, FIL *pFile, OFFSET_TYPE OffsetType);
 
 /**
   * @brief  
@@ -167,8 +155,6 @@ BYTE JMV_PLAYER_Init(uint8_t Volume, uint32_t SampleRate)
   */ 
 BYTE JMV_PLAYER_Start(FIL *pFile)
 {
-	uint32_t bytesread;
-	
 	if(JMVRead(pFile, sizeof(jmvHeader), 0, &jmvHeader))
 		return(100); // read error
 
@@ -201,15 +187,18 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 
 	if(jmvHeader.frame_jpeg)
 	{
-		StreamOffset = 0;
+		JPEG_ReadBufferPtr = (uint8_t *) malloc(jmvHeader.frame_max_size);
+		if(!JPEG_ReadBufferPtr)
+			return(200); /* Memory allocation error */
+		JPEG_ReadBufferSize = jmvHeader.frame_max_size;
 
-		StreamOffset = FindOffset(StreamOffset, pFile, WB_DWORD);
-		f_lseek (pFile, StreamOffset + 4);
-
-		if( f_read (pFile, jmvBufferCtl.pbuff, audio_buffer_size, &bytesread) != FR_OK )
+		if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff))
 			return(100); // read error
 
 		memcpy(jmvBufferCtl.pbuff + audio_buffer_size, jmvBufferCtl.pbuff, audio_buffer_size);
+
+		if(JMVRead(pFile, sizeof(FrameHeader), 0, &FrameHeader))
+			return(100); // read error
 
 		/* Init The JPEG Look Up Tables used for YCbCr to RGB conversion */
 		JPEG_InitColorTables();
@@ -218,20 +207,21 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 		JPEG_Handle.Instance = JPEG;
 		HAL_JPEG_Init(&JPEG_Handle);
 
-		StreamOffset = FindOffset(StreamOffset + audio_buffer_size, pFile, JPEG_SOI);
-		f_lseek (pFile, StreamOffset);
-
 		/* JPEG decoding with DMA (Not Blocking) Method */
-		JPEG_Decode_DMA(&JPEG_Handle, pFile);
+		if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
+			return(100); // read error
 		JPEG_Timeout = JPEG_PROCESS_TIMEOUT;
 
 		/* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
 		do
 		{
 			JPEG_Timeout--;
-			JPEG_InputHandler(&JPEG_Handle, pFile);
 		}while(JPEG_OutputHandler(&JPEG_Handle, JPEG_OUTPUT_DATA_BUFFER) == 0 && \
 		       JPEG_Timeout != 0);
+
+		/* Save the optimal timeout for JPEG decoding */
+		if(JPEG_Timeout != 0)
+			JPEG_Opt_Timeout = JPEG_PROCESS_TIMEOUT - JPEG_Timeout + JPEG_PROCESS_TIMEOUT_TRIM;
 
 		/* Get JPEG Info */
 		HAL_JPEG_GetInfo(&JPEG_Handle, &JPEG_Info);
@@ -273,8 +263,6 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
   */
 BYTE JMV_PLAYER_Process(FIL *pFile)
 {
-	uint32_t bytesread;
-	
 	switch(AudioState)
 	{
 		case AUDIO_STATE_PLAY:
@@ -282,26 +270,21 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 			{
 				if(jmvHeader.frame_jpeg)
 				{
-					StreamOffset = FindOffset(StreamOffset + Previous_FrameSize, pFile, WB_DWORD);
-					if(StreamOffset == 0) return(100); // read error
-					f_lseek (pFile, StreamOffset + 4);
-
-					if( f_read (pFile, jmvBufferCtl.pbuff, audio_buffer_size, &bytesread) != FR_OK )
+					if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff))
 						return(100); // read error
 
-					StreamOffset = FindOffset(StreamOffset + audio_buffer_size, pFile, JPEG_SOI);
-					if(StreamOffset == 0) return(100); // read error
-					f_lseek (pFile, StreamOffset);
+					if(JMVRead(pFile, sizeof(FrameHeader), 0, &FrameHeader))
+						return(100); // read error
 
 					/* JPEG decoding with DMA (Not Blocking) Method */
-					JPEG_Decode_DMA(&JPEG_Handle, pFile);
-					JPEG_Timeout = JPEG_PROCESS_TIMEOUT;
+					if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
+						return(100); // read error
+					JPEG_Timeout = JPEG_Opt_Timeout;
 
 					/* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
 					do
 					{
 						JPEG_Timeout--;
-						JPEG_InputHandler(&JPEG_Handle, pFile);
 					}while(JPEG_OutputHandler(&JPEG_Handle, JPEG_OUTPUT_DATA_BUFFER) == 0 && \
 					       JPEG_Timeout != 0);
 
@@ -335,26 +318,21 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 			{
 				if(jmvHeader.frame_jpeg)
 				{
-					StreamOffset = FindOffset(StreamOffset + Previous_FrameSize, pFile, WB_DWORD);
-					if(StreamOffset == 0) return(100); // read error
-					f_lseek (pFile, StreamOffset + 4);
-
-					if( f_read (pFile, jmvBufferCtl.pbuff + audio_buffer_size, audio_buffer_size, &bytesread) != FR_OK )
+					if(JMVRead(pFile, audio_buffer_size, 0, jmvBufferCtl.pbuff + audio_buffer_size))
 						return(100); // read error
 
-					StreamOffset = FindOffset(StreamOffset + audio_buffer_size, pFile, JPEG_SOI);
-					if(StreamOffset == 0) return(100); // read error
-					f_lseek (pFile, StreamOffset);
+					if(JMVRead(pFile, sizeof(FrameHeader), 0, &FrameHeader))
+						return(100); // read error
 
 					/* JPEG decoding with DMA (Not Blocking) Method */
-					JPEG_Decode_DMA(&JPEG_Handle, pFile);
-					JPEG_Timeout = JPEG_PROCESS_TIMEOUT;
+					if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
+						return(100); // read error
+					JPEG_Timeout = JPEG_Opt_Timeout;
 
 					/* Wait till end of JPEG decoding and perfom Input/Output Processing in BackGround */
 					do
 					{
 						JPEG_Timeout--;
-						JPEG_InputHandler(&JPEG_Handle, pFile);
 					}while(JPEG_OutputHandler(&JPEG_Handle, JPEG_OUTPUT_DATA_BUFFER) == 0 && \
 					       JPEG_Timeout != 0);
 
@@ -434,6 +412,9 @@ void JMV_PLAYER_FreeMemory(void)
 {
 	free(jmvBufferCtl.pbuff);
 	jmvBufferCtl.pbuff = NULL;
+
+	free(JPEG_ReadBufferPtr);
+	JPEG_ReadBufferPtr = NULL;
 }
 
 #ifndef USE_AUDIO_DECODERS
@@ -591,60 +572,6 @@ WORD ReadChunk(FIL *fileStream, WORD numSectors, WORD paddingSectors, DWORD *add
 	}
 
 	return sectorsToRead;
-}
-
-/**
-  * @brief
-  * @param
-  * @retval
-  */
-static uint32_t FindOffset(uint32_t offset, FIL *pFile, OFFSET_TYPE OffsetType)
-{
-  uint32_t index = offset, i, readSize = 0;
-
-  do
-  {
-    if(pFile->fsize <=  (index + 1))
-    {
-      /* end of file reached*/
-      return 0;
-    }
-    f_lseek (pFile, index);
-    f_read (pFile, &PatternSearchBuffer, PATTERN_SEARCH_BUFFERSIZE, &readSize);
-
-    if(readSize != 0)
-    {
-      for(i = 0; i < (readSize - 1); i++)
-      {
-    	  switch(OffsetType)
-    	  {
-    	  	  case JPEG_SOI:
-    	  		  if( (PatternSearchBuffer[i] == JPEG_SOI_MARKER_BYTE0)     && \
-    	              (PatternSearchBuffer[i + 1] == JPEG_SOI_MARKER_BYTE1) && \
-    	              (PatternSearchBuffer[i + 2] == JPEG_SOI_MARKER_BYTE2) && \
-    	              (PatternSearchBuffer[i + 3] == JPEG_SOI_MARKER_BYTE3) )
-    	  		  {
-    	  			  return index + i;
-    	  		  }
-    	  	  	  break;
-
-    	  	  case WB_DWORD:
-    	  		  if( (PatternSearchBuffer[i] == WB_DWORD_BYTE0)     && \
-    	              (PatternSearchBuffer[i + 1] == WB_DWORD_BYTE1) && \
-    	              (PatternSearchBuffer[i + 2] == WB_DWORD_BYTE2) && \
-    	              (PatternSearchBuffer[i + 3] == WB_DWORD_BYTE3) )
-    	  		  {
-    	  			  return index + i;
-    	  		  }
-    	  	  	  break;
-    	  }
-      }
-
-      index +=  (readSize - 1);
-    }
-  }while(readSize != 0);
-
-  return 0;
 }
 
 #endif /* SUPPORT_JMV */

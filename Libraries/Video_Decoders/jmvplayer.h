@@ -47,6 +47,7 @@
  	uint8_t  frame_bitdepth;
  	uint8_t  frame_rate;
  	uint8_t  frame_jpeg;
+ 	uint32_t frame_max_size;
 
  	/* audio */
  	uint8_t  audio_numchannels;
@@ -54,7 +55,7 @@
  	uint16_t audio_rate;
 
  	/* padding */
- 	uint8_t  pad[501];
+ 	uint8_t  pad[497];
  } __attribute__ ((packed)) JMV_HEADER;
 
 /* Exported constants --------------------------------------------------------*/

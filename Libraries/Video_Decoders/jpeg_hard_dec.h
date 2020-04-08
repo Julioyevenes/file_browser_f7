@@ -41,9 +41,8 @@
 /* Exported macro ------------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile);
+BYTE JPEG_Decode_DMA(JPEG_HandleTypeDef *hjpeg, FIL *pFile, uint32_t *ReadBufferPtr, uint32_t ReadBufferSize);
 BYTE JPEG_OutputHandler(JPEG_HandleTypeDef *hjpeg, uint32_t FrameBufferAddress);
-BYTE JPEG_InputHandler(JPEG_HandleTypeDef *hjpeg, FIL *pFile);
 
 void DMA2D_Init(uint32_t ImageWidth, uint32_t ImageHeight);
 void DMA2D_CopyBuffer(uint32_t *pSrc, uint32_t *pDst, uint16_t xPos, uint16_t yPos, uint16_t ImageWidth, uint16_t ImageHeight);
