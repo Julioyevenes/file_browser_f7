@@ -44,8 +44,8 @@
 
 /* Private constants --------------------------------------------------------*/
 /* Private macro ------------------------------------------------------------*/
-#define FRAME_BUFFER_PTR   ((uint32_t)0xC0000000)
-#define AUDIO_SIZE         (0xFFFFFFFF)
+#define FRAME_BUFFER_PTR   			0xC0000000
+#define AUDIO_SIZE         			0xFFFFFFFF
 
 #define JPEG_OUTPUT_DATA_BUFFER  	0xC0200000
 #define JPEG_PROCESS_TIMEOUT 	 	0xFFFFFFFF
@@ -187,7 +187,7 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 
 	if(jmvHeader.frame_jpeg)
 	{
-		JPEG_ReadBufferPtr = (uint8_t *) malloc(jmvHeader.frame_max_size);
+		JPEG_ReadBufferPtr = (uint32_t *) malloc(jmvHeader.frame_max_size);
 		if(!JPEG_ReadBufferPtr)
 			return(200); /* Memory allocation error */
 		JPEG_ReadBufferSize = jmvHeader.frame_max_size;
@@ -199,6 +199,9 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 
 		if(JMVRead(pFile, sizeof(FrameHeader), 0, &FrameHeader))
 			return(100); // read error
+
+		if(FrameHeader.frame_size > JPEG_ReadBufferSize)
+			return(200); /* Memory allocation error */
 
 		/* Init The JPEG Look Up Tables used for YCbCr to RGB conversion */
 		JPEG_InitColorTables();
@@ -276,6 +279,9 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 					if(JMVRead(pFile, sizeof(FrameHeader), 0, &FrameHeader))
 						return(100); // read error
 
+					if(FrameHeader.frame_size > JPEG_ReadBufferSize)
+						return(200); /* Memory allocation error */
+
 					/* JPEG decoding with DMA (Not Blocking) Method */
 					if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
 						return(100); // read error
@@ -323,6 +329,9 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 
 					if(JMVRead(pFile, sizeof(FrameHeader), 0, &FrameHeader))
 						return(100); // read error
+
+					if(FrameHeader.frame_size > JPEG_ReadBufferSize)
+						return(200); /* Memory allocation error */
 
 					/* JPEG decoding with DMA (Not Blocking) Method */
 					if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
