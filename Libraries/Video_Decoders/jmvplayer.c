@@ -201,7 +201,7 @@ BYTE JMV_PLAYER_Start(FIL *pFile)
 			return(100); // read error
 
 		if(FrameHeader.frame_size > JPEG_ReadBufferSize)
-			return(200); /* Memory allocation error */
+			return(100); // read error
 
 		/* Init The JPEG Look Up Tables used for YCbCr to RGB conversion */
 		JPEG_InitColorTables();
@@ -280,7 +280,7 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 						return(100); // read error
 
 					if(FrameHeader.frame_size > JPEG_ReadBufferSize)
-						return(200); /* Memory allocation error */
+						return(100); // read error
 
 					/* JPEG decoding with DMA (Not Blocking) Method */
 					if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
@@ -331,7 +331,7 @@ BYTE JMV_PLAYER_Process(FIL *pFile)
 						return(100); // read error
 
 					if(FrameHeader.frame_size > JPEG_ReadBufferSize)
-						return(200); /* Memory allocation error */
+						return(100); // read error
 
 					/* JPEG decoding with DMA (Not Blocking) Method */
 					if(JPEG_Decode_DMA(&JPEG_Handle, pFile, JPEG_ReadBufferPtr, FrameHeader.frame_size))
