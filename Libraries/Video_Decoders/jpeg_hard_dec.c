@@ -183,6 +183,13 @@ void HAL_JPEG_InfoReadyCallback(JPEG_HandleTypeDef *hjpeg, JPEG_ConfTypeDef *pIn
   */
 void HAL_JPEG_GetDataCallback(JPEG_HandleTypeDef *hjpeg, uint32_t NbDecodedData)
 {
+	if(NbDecodedData == Jpeg_IN_BufferTab[0].DataBufferSize)
+	{
+		Jpeg_IN_BufferTab[0].State = JPEG_BUFFER_EMPTY;
+		Jpeg_IN_BufferTab[0].DataBufferSize = 0;
+
+		HAL_JPEG_Pause(hjpeg, JPEG_PAUSE_RESUME_INPUT);
+	}
 }
 
 /**
