@@ -50,8 +50,8 @@ enum
 };
 
 /* Exported constants --------------------------------------------------------*/
-#define FLASH_USER_START_ADDR   (uint32_t)0x08080000   /* Start @ of user Flash area */
-#define FLASH_USER_END_ADDR     (uint32_t)0x080FFFFB   /* End @ of user Flash area */
+#define FLASH_USER_START_ADDR   (uint32_t)0x08100000   /* Start @ of user Flash area */
+#define FLASH_USER_END_ADDR     (uint32_t)0x08200000   /* End @ of user Flash area */
 
 /* Exported macro ------------------------------------------------------------*/
 

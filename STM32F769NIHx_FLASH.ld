@@ -41,7 +41,7 @@ _Min_Stack_Size = 0x2000; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 460K
+FLASH (rx)      : ORIGIN = 0x08000000, LENGTH = 512K
 RAM (xrw)      : ORIGIN = 0x20000000, LENGTH = 512K
 }
 
